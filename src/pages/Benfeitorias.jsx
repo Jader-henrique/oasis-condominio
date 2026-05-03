@@ -3,6 +3,7 @@ import { supabase } from '../supabase'
 import { exportarParaExcel } from '../utils/excel'
 import MapaCotacoes from './MapaCotacoes'
 import ViewModal from './ViewModal'
+import BuscaConta from './BuscaConta'
 import { useSort, SortableTh } from '../utils/useSort'
 
 const PRIOS = ['URGENTE','ATENÇÃO','PREVENTIVO','BAIXA','BENFEITORIA']
@@ -52,10 +53,17 @@ export default function Benfeitorias({ perfil }) {
   const [adicionandoCat, setAdicionandoCat] = useState(false)
   const [cotacoesItem, setCotacoesItem] = useState(null)
   const [verItem, setVerItem] = useState(null)
+  const [contas, setContas] = useState([])
+  const [buscandoConta, setBuscandoConta] = useState(false)
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
   const { sortBy, sortDir, onSort, ordenar } = useSort('previsto', 'asc')
 
-  useEffect(() => { carregar(); carregarCategorias() }, [])
+  useEffect(() => { carregar(); carregarCategorias(); carregarContas() }, [])
+
+  async function carregarContas() {
+    const { data } = await supabase.from('contas').select('*').is('excluido_em', null).order('descricao')
+    setContas(data || [])
+  }
 
   async function carregar() {
     const { data } = await supabase.from('benfeitorias').select('*').is('excluido_em', null).order('num')
@@ -83,7 +91,7 @@ export default function Benfeitorias({ perfil }) {
       num: String(proximoNum()), sistema:'', categoria_id:null,
       prioridade:'BENFEITORIA', periodo:'Não Recorrente',
       responsavel_tipo:'Síndico', recorrencia:'Não recorrente',
-      previsto:null, data_inicio_real:null, realizado:null,
+      previsto:null, data_inicio_real:null, realizado:null, conta_id:null,
       valor_previsto:null, valor_realizado:null, obs:''
     })
     setNovaCat(''); setAdicionandoCat(false)
@@ -137,6 +145,8 @@ export default function Benfeitorias({ perfil }) {
       alert('Erro ao salvar: ' + (e?.message || JSON.stringify(e)))
     }
   }
+
+  const contaSelecionada = contas.find(c => c.id === form.conta_id) || null
 
   const itensFiltrados = itens.filter(i => {
     if (filtroResp !== 'Todos' && i.responsavel_tipo !== filtroResp) return false
@@ -312,6 +322,25 @@ export default function Benfeitorias({ perfil }) {
             </div>
 
             <div className="form-group">
+              <label>Conta orçamentária / contábil</label>
+              {form.conta_id ? (
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <div style={{flex:1, padding:'8px 10px', border:'0.5px solid var(--borda)', borderRadius:8, fontSize:13, background:'var(--cinza-bg)'}}>
+                    {contaSelecionada ? (<>
+                      <div style={{fontWeight:500}}>{contaSelecionada.descricao}</div>
+                      <div style={{fontSize:10,color:'var(--texto-ter)'}}>{contaSelecionada.grupo_orcamentario}{contaSelecionada.codigo_contabil ? ' · '+contaSelecionada.codigo_contabil : ''}</div>
+                    </>) : <span style={{color:'var(--texto-ter)'}}>(conta selecionada)</span>}
+                  </div>
+                  <button type="button" className="btn btn-sm" onClick={() => setForm({...form, conta_id:null})}>Trocar</button>
+                </div>
+              ) : (
+                <button type="button" className="btn" style={{width:'100%'}} onClick={() => setBuscandoConta(true)}>
+                  <i className="fa-solid fa-magnifying-glass" style={{marginRight:6}}></i>Selecionar conta...
+                </button>
+              )}
+            </div>
+
+            <div className="form-group">
               <label>Período</label>
               <select value={form.periodo||''} onChange={e => setForm({...form, periodo: e.target.value || null})}>
                 <option value="">— selecione —</option>
@@ -379,6 +408,12 @@ export default function Benfeitorias({ perfil }) {
             </div>
           </div>
         </div>
+      )}
+
+      {buscandoConta && (
+        <BuscaConta grupoFixo="Benfeitorias"
+          onSelect={c => { setForm({...form, conta_id: c.id}); setContas(prev => prev.find(p=>p.id===c.id)?prev:[...prev,c]); setBuscandoConta(false) }}
+          onCancelar={() => setBuscandoConta(false)}/>
       )}
 
       {cotacoesItem && (

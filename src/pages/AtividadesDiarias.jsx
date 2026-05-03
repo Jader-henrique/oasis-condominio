@@ -3,6 +3,7 @@ import { supabase } from '../supabase'
 import { exportarParaExcel } from '../utils/excel'
 import MapaCotacoes from './MapaCotacoes'
 import { useSort, SortableTh } from '../utils/useSort'
+import BuscaConta from './BuscaConta'
 import ViewModal from './ViewModal'
 
 const FREQS = ['Diário','Semanal','Quinzenal','Mensal','Bimestral','Trimestral','Semestral','Anual','A Cada 2 Anos','A Cada 3 Anos','A Cada 5 Anos']
@@ -33,8 +34,15 @@ export default function AtividadesDiarias({ perfil }) {
   const [verItem, setVerItem] = useState(null)
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
   const { sortBy, sortDir, onSort, ordenar } = useSort('proxima_data', 'asc')
+  const [contas, setContas] = useState([])
+  const [buscandoConta, setBuscandoConta] = useState(false)
 
-  useEffect(() => { carregar() }, [])
+  useEffect(() => { carregar(); carregarContas() }, [])
+
+  async function carregarContas() {
+    const { data } = await supabase.from('contas').select('*').is('excluido_em', null).order('descricao')
+    setContas(data || [])
+  }
 
   async function carregar() {
     const { data } = await supabase.from('calendario').select('*').is('excluido_em', null).order('num')
@@ -45,7 +53,7 @@ export default function AtividadesDiarias({ perfil }) {
     return Math.max(...itens.map(i => parseInt(i.num) || 0)) + 1
   }
   function abrirNovo() {
-    setForm({ num:String(proximoNum()), descricao:'', frequencia:'Mensal', mes:'', status:'nrealizado', responsavel_tipo:'Zeladoria', valor:null, proxima_data:null, pontual:false })
+    setForm({ num:String(proximoNum()), descricao:'', frequencia:'Mensal', mes:'', status:'nrealizado', responsavel_tipo:'Zeladoria', valor:null, proxima_data:null, pontual:false, conta_id:null })
     setArquivo(null); setModal('novo')
   }
   function abrirEditar(item) { setForm({ ...item }); setArquivo(null); setModal('editar') }
@@ -98,6 +106,8 @@ export default function AtividadesDiarias({ perfil }) {
       alert('Erro ao salvar: ' + (e?.message || JSON.stringify(e)))
     }
   }
+
+  const contaSelecionada = contas.find(c => c.id === form.conta_id) || null
 
   const itensFiltrados = itens.filter(i => {
     if (filtroResp !== 'Todos' && i.responsavel_tipo !== filtroResp) return false
@@ -261,6 +271,25 @@ export default function AtividadesDiarias({ perfil }) {
                 onChange={e => setForm({...form, proxima_data: e.target.value || null})}/>
             </div>
             <div className="form-group">
+              <label>Conta orçamentária / contábil</label>
+              {form.conta_id ? (
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <div style={{flex:1, padding:'8px 10px', border:'0.5px solid var(--borda)', borderRadius:8, fontSize:13, background:'var(--cinza-bg)'}}>
+                    {contaSelecionada ? (<>
+                      <div style={{fontWeight:500}}>{contaSelecionada.descricao}</div>
+                      <div style={{fontSize:10,color:'var(--texto-ter)'}}>{contaSelecionada.grupo_orcamentario}{contaSelecionada.codigo_contabil ? ' · '+contaSelecionada.codigo_contabil : ''}</div>
+                    </>) : <span style={{color:'var(--texto-ter)'}}>(conta selecionada)</span>}
+                  </div>
+                  <button type="button" className="btn btn-sm" onClick={() => setForm({...form, conta_id:null})}>Trocar</button>
+                </div>
+              ) : (
+                <button type="button" className="btn" style={{width:'100%'}} onClick={() => setBuscandoConta(true)}>
+                  <i className="fa-solid fa-magnifying-glass" style={{marginRight:6}}></i>Selecionar conta...
+                </button>
+              )}
+            </div>
+
+            <div className="form-group">
               <label>Responsável (tipo)</label>
               <select value={form.responsavel_tipo||'Zeladoria'} onChange={e => setForm({...form,responsavel_tipo:e.target.value})}>
                 {RESP_TIPOS.map(r => <option key={r}>{r}</option>)}
@@ -281,6 +310,12 @@ export default function AtividadesDiarias({ perfil }) {
             </div>
           </div>
         </div>
+      )}
+
+      {buscandoConta && (
+        <BuscaConta grupoFixo="Atividades do Dia a Dia"
+          onSelect={c => { setForm({...form, conta_id: c.id}); setContas(prev => prev.find(p=>p.id===c.id)?prev:[...prev,c]); setBuscandoConta(false) }}
+          onCancelar={() => setBuscandoConta(false)}/>
       )}
 
       {cotacoesItem && (

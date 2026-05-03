@@ -3,6 +3,7 @@ import { supabase } from '../supabase'
 import { exportarParaExcel } from '../utils/excel'
 import MapaCotacoes from './MapaCotacoes'
 import ViewModal from './ViewModal'
+import BuscaConta from './BuscaConta'
 import { useSort, SortableTh } from '../utils/useSort'
 
 const PRIOS = ['URGENTE','ATENÇÃO','PREVENTIVO','BAIXA']
@@ -51,8 +52,15 @@ export default function Corretivas({ perfil }) {
   const [verItem, setVerItem] = useState(null)
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
   const { sortBy, sortDir, onSort, ordenar } = useSort('data_inicio_prevista', 'asc')
+  const [contas, setContas] = useState([])
+  const [buscandoConta, setBuscandoConta] = useState(false)
 
-  useEffect(() => { carregar() }, [])
+  useEffect(() => { carregar(); carregarContas() }, [])
+
+  async function carregarContas() {
+    const { data } = await supabase.from('contas').select('*').is('excluido_em', null).order('descricao')
+    setContas(data || [])
+  }
 
   async function carregar() {
     const { data } = await supabase.from('corretivas').select('*').is('excluido_em', null).order('num')
@@ -67,7 +75,7 @@ export default function Corretivas({ perfil }) {
       num: String(proximoNum()), item:'', prioridade:'URGENTE', status:'pendente',
       responsavel_tipo:'Síndico', recorrencia:'Não recorrente',
       empresa:null, valor_previsto:null, valor_realizado:null,
-      data_inicio_prevista:null, data_inicio_real:null, data_fim:null, obs:''
+      data_inicio_prevista:null, data_inicio_real:null, data_fim:null, conta_id:null, obs:''
     })
     setModal('novo')
   }
@@ -83,6 +91,29 @@ export default function Corretivas({ perfil }) {
     } catch (e) {
       alert('Erro ao excluir: ' + (e?.message || JSON.stringify(e)))
     }
+  }
+
+
+  function setarDataInicioReal(novaData) {
+    if (!novaData) { setForm({...form, data_inicio_real: null}); return }
+    // Regra: nunca pode ser maior que hoje
+    const hojeStr = new Date().toISOString().slice(0,10)
+    if (novaData > hojeStr) {
+      alert('A data de início real não pode ser maior que a data atual.')
+      return
+    }
+    // Regra: precisa de data_inicio_prevista
+    if (!form.data_inicio_prevista) {
+      const ok = confirm('Data de Início Prevista não foi preenchida, deseja utilizar a mesma data do realizado?')
+      if (ok) {
+        setForm({...form, data_inicio_prevista: novaData, data_inicio_real: novaData})
+      } else {
+        // reverte — mantém vazio
+        setForm({...form, data_inicio_real: null})
+      }
+      return
+    }
+    setForm({...form, data_inicio_real: novaData})
   }
 
   async function salvar() {
@@ -121,6 +152,8 @@ export default function Corretivas({ perfil }) {
       alert('Erro ao salvar: ' + (e?.message || JSON.stringify(e)))
     }
   }
+
+  const contaSelecionada = contas.find(c => c.id === form.conta_id) || null
 
   const itensFiltrados = itens.filter(i => {
     if (filtroResp !== 'Todos' && i.responsavel_tipo !== filtroResp) return false
@@ -294,14 +327,34 @@ export default function Corretivas({ perfil }) {
               <div className="form-group" style={{flex:1}}>
                 <label>Data início real <span style={{color:'var(--texto-ter)',fontSize:11}}>(quando iniciar)</span></label>
                 <input type="date"
+                  max={new Date().toISOString().slice(0,10)}
                   value={form.data_inicio_real ? String(form.data_inicio_real).slice(0,10) : ''}
-                  onChange={e => setForm({...form, data_inicio_real: e.target.value || null})}/>
+                  onChange={e => setarDataInicioReal(e.target.value)}/>
               </div>
               <div className="form-group" style={{flex:1}}>
                 <label>Conclusão <span style={{color:'var(--texto-ter)',fontSize:11}}>(via App)</span></label>
                 <input type="date" readOnly style={inputBloqueadoStyle}
                   value={form.data_fim ? String(form.data_fim).slice(0,10) : ''}/>
               </div>
+            </div>
+
+            <div className="form-group">
+              <label>Conta orçamentária / contábil</label>
+              {form.conta_id ? (
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <div style={{flex:1, padding:'8px 10px', border:'0.5px solid var(--borda)', borderRadius:8, fontSize:13, background:'var(--cinza-bg)'}}>
+                    {contaSelecionada ? (<>
+                      <div style={{fontWeight:500}}>{contaSelecionada.descricao}</div>
+                      <div style={{fontSize:10,color:'var(--texto-ter)'}}>{contaSelecionada.grupo_orcamentario}{contaSelecionada.codigo_contabil ? ' · '+contaSelecionada.codigo_contabil : ''}</div>
+                    </>) : <span style={{color:'var(--texto-ter)'}}>(conta selecionada)</span>}
+                  </div>
+                  <button type="button" className="btn btn-sm" onClick={() => setForm({...form, conta_id:null})}>Trocar</button>
+                </div>
+              ) : (
+                <button type="button" className="btn" style={{width:'100%'}} onClick={() => setBuscandoConta(true)}>
+                  <i className="fa-solid fa-magnifying-glass" style={{marginRight:6}}></i>Selecionar conta...
+                </button>
+              )}
             </div>
 
             <div className="form-group">
@@ -335,6 +388,12 @@ export default function Corretivas({ perfil }) {
             </div>
           </div>
         </div>
+      )}
+
+      {buscandoConta && (
+        <BuscaConta grupoFixo="Intervenções Corretivas"
+          onSelect={c => { setForm({...form, conta_id: c.id}); setContas(prev => prev.find(p=>p.id===c.id)?prev:[...prev,c]); setBuscandoConta(false) }}
+          onCancelar={() => setBuscandoConta(false)}/>
       )}
 
       {cotacoesItem && (
