@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { exportarParaExcel } from '../utils/excel'
 import ViewModal from './ViewModal'
+import { useSort, SortableTh } from '../utils/useSort'
 
 const TIPOS = [
   { value:'atividade',  label:'Atividade do Dia a Dia', tabela:'calendario',   campoNome:'descricao', prefixo:'A' },
@@ -94,6 +95,7 @@ export default function Orcamentos({ perfil }) {
   const [filtros, setFiltros] = useState({ periodoIni:'', periodoFim:'', empresa:'', itemId:'', tipo:'' })
   const [verItem, setVerItem] = useState(null)
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
+  const { sortBy, sortDir, onSort, ordenar } = useSort('data', 'asc')
 
   useEffect(() => { carregar() }, [])
 
@@ -255,8 +257,13 @@ export default function Orcamentos({ perfil }) {
         <table>
           <thead>
             <tr>
-              <th>Tipo</th><th>Item vinculado</th><th>Empresa</th><th>Valor</th>
-              <th>Data orçamento</th><th>Cadastrado em</th><th>Status</th>
+              <SortableTh col="item_tipo"    label="Tipo"            sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="item_id"      label="Item vinculado"  sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="empresa"      label="Empresa"         sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="valor"        label="Valor"           sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="data"         label="Data orçamento"  sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="data_criacao" label="Cadastrado em"   sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="selecionado"  label="Status"          sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               {isAdmin && <th></th>}
             </tr>
           </thead>
@@ -264,7 +271,7 @@ export default function Orcamentos({ perfil }) {
             {orcsFiltrados.length === 0 && (
               <tr><td colSpan={isAdmin ? 8 : 7} style={{textAlign:'center',padding:24,color:'var(--texto-ter)'}}>Nenhum orçamento</td></tr>
             )}
-            {orcsFiltrados.map(o => (
+            {ordenar(orcsFiltrados).map(o => (
               <tr key={o.id} onDoubleClick={() => setVerItem(o)} style={{cursor:'pointer'}}>
                 <td><span className="badge badge-baixa">{tipoLabel(o.item_tipo)}</span></td>
                 <td style={{fontWeight:500, fontSize:12}}>{nomeItem(o)}</td>

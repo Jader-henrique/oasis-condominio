@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { exportarParaExcel } from '../utils/excel'
 import MapaCotacoes from './MapaCotacoes'
+import { useSort, SortableTh } from '../utils/useSort'
 import ViewModal from './ViewModal'
 
 const FREQS = ['Diário','Semanal','Quinzenal','Mensal','Bimestral','Trimestral','Semestral','Anual','A Cada 2 Anos','A Cada 3 Anos','A Cada 5 Anos']
@@ -31,6 +32,7 @@ export default function AtividadesDiarias({ perfil }) {
   const [cotacoesItem, setCotacoesItem] = useState(null)
   const [verItem, setVerItem] = useState(null)
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
+  const { sortBy, sortDir, onSort, ordenar } = useSort('proxima_data', 'asc')
 
   useEffect(() => { carregar() }, [])
 
@@ -156,13 +158,19 @@ export default function AtividadesDiarias({ perfil }) {
         <table>
           <thead>
             <tr>
-              <th>#</th><th>Descrição</th><th>Tipo</th><th>Frequência</th>
-              <th>Responsável</th><th>Status</th><th>Próxima</th><th>Valor</th>
+              <SortableTh col="num"              label="#"           sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="descricao"        label="Descrição"   sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="pontual"          label="Tipo"        sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="frequencia"       label="Frequência"  sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="responsavel_tipo" label="Responsável" sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="status"           label="Status"      sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="proxima_data"     label="Próxima"     sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="valor"            label="Valor"       sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               {isAdmin && <th></th>}
             </tr>
           </thead>
           <tbody>
-            {itensFiltrados.map(c => (
+            {ordenar(itensFiltrados).map(c => (
               <tr key={c.id} onDoubleClick={() => setVerItem(c)} style={{cursor:'pointer'}}>
                 <td style={{color:'var(--texto-sec)'}}>{c.num}</td>
                 <td style={{fontWeight:500}}>{c.descricao}</td>

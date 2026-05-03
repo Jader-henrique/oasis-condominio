@@ -3,6 +3,7 @@ import { supabase } from '../supabase'
 import { exportarParaExcel } from '../utils/excel'
 import MapaCotacoes from './MapaCotacoes'
 import ViewModal from './ViewModal'
+import { useSort, SortableTh } from '../utils/useSort'
 
 const PRIOS = ['URGENTE','ATENÇÃO','PREVENTIVO','BAIXA','BENFEITORIA']
 const BADGE = { URGENTE:'urgente', ATENÇÃO:'atencao', PREVENTIVO:'preventivo', BAIXA:'baixa', BENFEITORIA:'benfeitoria' }
@@ -52,6 +53,7 @@ export default function Benfeitorias({ perfil }) {
   const [cotacoesItem, setCotacoesItem] = useState(null)
   const [verItem, setVerItem] = useState(null)
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
+  const { sortBy, sortDir, onSort, ordenar } = useSort('previsto', 'asc')
 
   useEffect(() => { carregar(); carregarCategorias() }, [])
 
@@ -217,15 +219,21 @@ export default function Benfeitorias({ perfil }) {
         <table>
           <thead>
             <tr>
-              <th>#</th><th>Sistema / Item</th><th>Categoria</th><th>Prio</th>
-              <th>Resp.</th>
-              <th>Vlr Previsto</th><th>Vlr Realizado</th>
-              <th>Início Prev.</th><th>Início Real</th><th>Realizado</th>
+              <SortableTh col="num"              label="#"             sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="sistema"          label="Sistema / Item" sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="categoria_id"     label="Categoria"     sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="prioridade"       label="Prio"          sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="responsavel_tipo" label="Resp."         sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="valor_previsto"   label="Vlr Previsto"  sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="valor_realizado"  label="Vlr Realizado" sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="previsto"         label="Início Prev."  sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="data_inicio_real" label="Início Real"   sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="realizado"        label="Realizado"     sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               {isAdmin && <th></th>}
             </tr>
           </thead>
           <tbody>
-            {itensFiltrados.map(i => {
+            {ordenar(itensFiltrados).map(i => {
               const cat = categorias.find(c => c.id === i.categoria_id)
               return (
                 <tr key={i.id} onDoubleClick={() => setVerItem(i)} style={{cursor:'pointer'}}>
