@@ -45,7 +45,7 @@ function ModalBuscaItem({ tipo, onSelect, onCancelar }) {
 
   useEffect(() => { carregar() }, [tipo])
   async function carregar() {
-    const { data } = await supabase.from(tipoCfg.tabela).select('*').order('num')
+    const { data } = await supabase.from(tipoCfg.tabela).select('*').is('excluido_em', null).order('num')
     setItens(data || [])
   }
 
@@ -100,9 +100,9 @@ export default function Orcamentos({ perfil }) {
   async function carregar() {
     const [o, c, cor, b] = await Promise.all([
       supabase.from('orcamentos').select('*').is('excluido_em', null).order('data_criacao', { ascending:false }),
-      supabase.from('calendario').select('id,num,descricao,valor'),
-      supabase.from('corretivas').select('id,num,item,valor'),
-      supabase.from('benfeitorias').select('id,num,sistema,valor'),
+      supabase.from('calendario').select('id,num,descricao,valor').is('excluido_em', null),
+      supabase.from('corretivas').select('id,num,item,valor').is('excluido_em', null),
+      supabase.from('benfeitorias').select('id,num,sistema,valor').is('excluido_em', null),
     ])
     setOrcamentos(o.data || [])
     setItensTodos({ calendario: c.data || [], corretivas: cor.data || [], benfeitorias: b.data || [] })

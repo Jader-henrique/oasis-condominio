@@ -41,9 +41,9 @@ export default function Calendario({ perfil }) {
 
   async function carregar() {
     const [a, c, b] = await Promise.all([
-      supabase.from('calendario').select('*'),
-      supabase.from('corretivas').select('*'),
-      supabase.from('benfeitorias').select('*'),
+      supabase.from('calendario').select('*').is('excluido_em', null),
+      supabase.from('corretivas').select('*').is('excluido_em', null),
+      supabase.from('benfeitorias').select('*').is('excluido_em', null),
     ])
     const ev = []
     ;(a.data || []).forEach(i => ev.push({

@@ -23,9 +23,9 @@ export default function AppVistorias({ perfil }) {
 
   async function carregar() {
     const [a, c, b] = await Promise.all([
-      supabase.from('calendario').select('*'),
-      supabase.from('corretivas').select('*'),
-      supabase.from('benfeitorias').select('*'),
+      supabase.from('calendario').select('*').is('excluido_em', null),
+      supabase.from('corretivas').select('*').is('excluido_em', null),
+      supabase.from('benfeitorias').select('*').is('excluido_em', null),
     ])
     const lista = []
     ;(a.data || []).forEach(i => lista.push({ _origem:'atividade', _id:i.id, _nome:i.descricao, _resp:i.responsavel_tipo, _feita: i.status==='realizado', ...i }))

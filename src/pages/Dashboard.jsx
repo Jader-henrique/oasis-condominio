@@ -42,10 +42,10 @@ export default function Dashboard({ perfil }) {
 
   async function carregar() {
     const [a, c, b, o, s] = await Promise.all([
-      supabase.from('calendario').select('*'),
-      supabase.from('corretivas').select('*'),
-      supabase.from('benfeitorias').select('*'),
-      supabase.from('orcamentos').select('*'),
+      supabase.from('calendario').select('*').is('excluido_em', null),
+      supabase.from('corretivas').select('*').is('excluido_em', null),
+      supabase.from('benfeitorias').select('*').is('excluido_em', null),
+      supabase.from('orcamentos').select('*').is('excluido_em', null),
       supabase.from('solicitacoes').select('*'),
     ])
     setAtividades(a.data||[]); setCorretivas(c.data||[]); setBenfeitorias(b.data||[])

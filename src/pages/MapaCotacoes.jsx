@@ -41,7 +41,7 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
 
   async function carregar() {
     const { data } = await supabase.from('orcamentos').select('*')
-      .eq('item_tipo', tipo).eq('item_id', itemId).order('valor', { ascending:true })
+      .eq('item_tipo', tipo).eq('item_id', itemId).is('excluido_em', null).order('valor', { ascending:true })
     setOrcs(data || [])
     const { data: d } = await supabase.from('documentos_item').select('*')
       .eq('item_tipo', tipo).eq('item_id', itemId).order('criado_em', { ascending:false })

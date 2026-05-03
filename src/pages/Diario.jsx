@@ -32,7 +32,7 @@ function ModalBuscaItem({ tipo, onSelect, onCancelar }) {
   const [itens, setItens] = useState([])
   const cfg = TIPOS.find(t => t.value === tipo)
   useEffect(() => { (async () => {
-    const { data } = await supabase.from(cfg.tabela).select('*').order('num')
+    const { data } = await supabase.from(cfg.tabela).select('*').is('excluido_em', null).order('num')
     setItens(data || [])
   })() }, [tipo])
   const filtrados = itens.filter(i => {

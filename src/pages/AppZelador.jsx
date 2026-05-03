@@ -32,9 +32,9 @@ export default function AppZelador({ perfil }) {
 
   async function carregar() {
     const [a, c, b] = await Promise.all([
-      supabase.from('calendario').select('*').eq('responsavel_tipo','Zeladoria'),
-      supabase.from('corretivas').select('*').eq('responsavel_tipo','Zeladoria'),
-      supabase.from('benfeitorias').select('*').eq('responsavel_tipo','Zeladoria'),
+      supabase.from('calendario').select('*').eq('responsavel_tipo','Zeladoria').is('excluido_em', null),
+      supabase.from('corretivas').select('*').eq('responsavel_tipo','Zeladoria').is('excluido_em', null),
+      supabase.from('benfeitorias').select('*').eq('responsavel_tipo','Zeladoria').is('excluido_em', null),
     ])
     const lista = []
     ;(a.data || []).forEach(i => lista.push({ _origem:'atividade', _id:i.id, _nome:i.descricao, _data:i.proxima_data, _frequencia:i.frequencia, _feita: i.status==='realizado', ...i }))
