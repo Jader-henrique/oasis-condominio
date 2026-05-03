@@ -9,6 +9,7 @@ import Orcamentos from './Orcamentos'
 import Diario from './Diario'
 import Publicacoes from './Publicacoes'
 import Solicitacoes from './Solicitacoes'
+import Contas from './Contas'
 import AppZelador from './AppZelador'
 import AppVistorias from './AppVistorias'
 
@@ -19,6 +20,7 @@ const MENU = [
   { id:'benfeitorias', label:'Benfeitorias' },
   { id:'calendario',   label:'Calendário' },
   { id:'orcamentos',   label:'Orçamentos de Fornecedores' },
+  { id:'contas',       label:'Contas' },
   { id:'diario',       label:'Diário de Manutenções' },
   { id:'solicitacoes', label:'Solicitações de Morador' },
   { id:'publicacoes',  label:'Publicações' },
@@ -36,6 +38,7 @@ export default function Layout({ perfil }) {
     benfeitorias: <Benfeitorias perfil={perfil} />,
     calendario:   <Calendario perfil={perfil} />,
     orcamentos:   <Orcamentos perfil={perfil} />,
+    contas:       <Contas perfil={perfil} />,
     diario:       <Diario perfil={perfil} />,
     solicitacoes: <Solicitacoes perfil={perfil} />,
     publicacoes:  <Publicacoes perfil={perfil} />,
