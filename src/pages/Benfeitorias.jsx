@@ -35,6 +35,10 @@ function moedaInputValue(v) {
   return num.toLocaleString('pt-BR', { style:'currency', currency:'BRL', minimumFractionDigits:2 })
 }
 
+const inputBloqueadoStyle = {
+  background:'var(--cinza-bg)', color:'var(--texto-sec)', cursor:'not-allowed'
+}
+
 export default function Benfeitorias({ perfil }) {
   const [itens, setItens] = useState([])
   const [categorias, setCategorias] = useState([])
@@ -73,7 +77,13 @@ export default function Benfeitorias({ perfil }) {
     return Math.max(...itens.map(i => parseInt(i.num) || 0)) + 1
   }
   function abrirNovo() {
-    setForm({ num: String(proximoNum()), sistema:'', categoria_id:null, prioridade:'BENFEITORIA', periodo:'Não Recorrente', responsavel:'', responsavel_tipo:'Síndico', recorrencia:'Não recorrente', previsto:null, realizado:null, valor:null, obs:'' })
+    setForm({
+      num: String(proximoNum()), sistema:'', categoria_id:null,
+      prioridade:'BENFEITORIA', periodo:'Não Recorrente',
+      responsavel_tipo:'Síndico', recorrencia:'Não recorrente',
+      previsto:null, data_inicio_real:null, realizado:null,
+      valor_previsto:null, valor_realizado:null, obs:''
+    })
     setNovaCat(''); setAdicionandoCat(false)
     setModal('novo')
   }
@@ -96,18 +106,24 @@ export default function Benfeitorias({ perfil }) {
 
   async function salvar() {
     try {
-      // remove campos legados / vazios
-      const { categoria, ...rest } = form
+      // Bloqueia edição direta de campos preenchidos pelo workflow
+      const { categoria, valor, valor_realizado, realizado, responsavel, ...rest } = form
       const payload = {}
       Object.keys(rest).forEach(k => {
         const v = rest[k]
         if (v === undefined) return
-        if (v === '' && !['sistema','responsavel'].includes(k)) return
+        if (v === '' && !['sistema'].includes(k)) return
         payload[k] = v
       })
+      // Em edição, preserva valores que vêm do workflow (sem permitir alteração)
+      if (modal === 'editar') {
+        if (valor_realizado !== undefined) payload.valor_realizado = valor_realizado
+        if (realizado !== undefined)       payload.realizado = realizado
+      } else {
+        delete payload.id
+      }
       let result
       if (modal === 'novo') {
-        delete payload.id
         result = await supabase.from('benfeitorias').insert([payload])
       } else {
         const { id, ...resto } = payload
@@ -130,7 +146,7 @@ export default function Benfeitorias({ perfil }) {
   const total      = itens.length
   const realizados = itens.filter(i => i.realizado).length
   const pendentes  = total - realizados
-  const valorTotal = itens.reduce((s,i) => s + (parseFloat(i.valor)||0), 0)
+  const valorTotal = itens.reduce((s,i) => s + (parseFloat(i.valor_realizado || i.valor)||0), 0)
 
   const btnFiltro = (ativo, onClick, label) => (
     <button onClick={onClick} style={{
@@ -141,6 +157,22 @@ export default function Benfeitorias({ perfil }) {
     }}>{label}</button>
   )
 
+  function exportar() {
+    const dados = itensFiltrados.map(i => {
+      const cat = categorias.find(c => c.id === i.categoria_id)
+      return {
+        Num: i.num, Sistema: i.sistema, Categoria: cat?.nome||'',
+        Prioridade: i.prioridade, Período: i.periodo, Responsável: i.responsavel_tipo,
+        'Valor Previsto':  i.valor_previsto,
+        'Valor Realizado': i.valor_realizado || i.valor,
+        'Início Previsto': fmtDataBR(i.previsto),
+        'Início Real':     fmtDataBR(i.data_inicio_real),
+        Realizado:         fmtDataBR(i.realizado),
+      }
+    })
+    exportarParaExcel(dados, 'benfeitorias.xlsx', 'Benfeitorias')
+  }
+
   return (
     <div>
       <div className="page-title">Benfeitorias</div>
@@ -150,7 +182,7 @@ export default function Benfeitorias({ perfil }) {
         <div className="stat"><div className="stat-n">{total}</div><div className="stat-l">Total</div></div>
         <div className="stat"><div className="stat-n" style={{color:'var(--amarelo)'}}>{pendentes}</div><div className="stat-l">Pendentes</div></div>
         <div className="stat"><div className="stat-n" style={{color:'var(--verde)'}}>{realizados}</div><div className="stat-l">Realizadas</div></div>
-        <div className="stat"><div className="stat-n" style={{color:'var(--azul)',fontSize:18}}>{fmtMoeda(valorTotal) || 'R$ 0,00'}</div><div className="stat-l">Valor total</div></div>
+        <div className="stat"><div className="stat-n" style={{color:'var(--azul)',fontSize:18}}>{fmtMoeda(valorTotal) || 'R$ 0,00'}</div><div className="stat-l">Valor realizado total</div></div>
       </div>
 
       <div style={{display:'flex', gap:16, marginBottom:14, flexWrap:'wrap'}}>
@@ -172,7 +204,10 @@ export default function Benfeitorias({ perfil }) {
         </div>
       </div>
 
-      {isAdmin && <button className="btn btn-success" style={{marginBottom:12}} onClick={abrirNovo}>+ Adicionar benfeitoria</button>}
+      <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+        {isAdmin && <button className="btn btn-success" onClick={abrirNovo}>+ Adicionar benfeitoria</button>}
+        <button className="btn btn-sm" onClick={exportar}><i className="fa-solid fa-file-excel" style={{marginRight:6}}></i>Exportar Excel</button>
+      </div>
 
       <div style={{fontSize:12, color:'var(--texto-sec)', marginBottom:8}}>
         Exibindo {itensFiltrados.length} de {total} itens
@@ -182,9 +217,10 @@ export default function Benfeitorias({ perfil }) {
         <table>
           <thead>
             <tr>
-              <th>#</th><th>Sistema / Item</th><th>Categoria</th><th>Prioridade</th>
-              <th>Responsável</th>
-              <th>Previsto</th><th>Realizado</th><th>Valor</th>
+              <th>#</th><th>Sistema / Item</th><th>Categoria</th><th>Prio</th>
+              <th>Resp.</th>
+              <th>Vlr Previsto</th><th>Vlr Realizado</th>
+              <th>Início Prev.</th><th>Início Real</th><th>Realizado</th>
               {isAdmin && <th></th>}
             </tr>
           </thead>
@@ -203,18 +239,20 @@ export default function Benfeitorias({ perfil }) {
                       color: i.responsavel_tipo==='Zeladoria' ? 'var(--azul)' : i.responsavel_tipo==='Síndico' ? 'var(--amarelo)' : 'var(--cinza)'
                     }}>{i.responsavel_tipo||'—'}</span>
                   </td>
-                  <td>{i.previsto ? fmtDataBR(i.previsto) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
-                  <td>{i.realizado ? <span style={{color:'var(--verde)',fontWeight:500}}>{fmtDataBR(i.realizado)}</span> : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
-                  <td style={{whiteSpace:'nowrap',fontWeight:500}}>{i.valor != null ? fmtMoeda(i.valor) : <span style={{color:'var(--texto-ter)',fontWeight:400}}>—</span>}</td>
+                  <td style={{whiteSpace:'nowrap'}}>{i.valor_previsto != null ? fmtMoeda(i.valor_previsto) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
+                  <td style={{whiteSpace:'nowrap',fontWeight:500,color:'var(--verde)'}}>{(i.valor_realizado != null || i.valor != null) ? fmtMoeda(i.valor_realizado || i.valor) : <span style={{color:'var(--texto-ter)',fontWeight:400}}>—</span>}</td>
+                  <td style={{whiteSpace:'nowrap'}}>{i.previsto ? fmtDataBR(i.previsto) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
+                  <td style={{whiteSpace:'nowrap'}}>{i.data_inicio_real ? fmtDataBR(i.data_inicio_real) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
+                  <td style={{whiteSpace:'nowrap'}}>{i.realizado ? <span style={{color:'var(--verde)',fontWeight:500}}>{fmtDataBR(i.realizado)}</span> : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
                   {isAdmin && (
                     <td style={{display:'flex',gap:4}}>
-                      <button className="btn btn-sm" onClick={() => abrirEditar(i)}>Editar</button>
+                      <button className="btn btn-sm" onClick={e => { e.stopPropagation(); abrirEditar(i) }}>Editar</button>
                       <button className="btn btn-sm" style={{background:'var(--azul-bg)',color:'var(--azul)',borderColor:'var(--azul)'}}
                         title="Mapa de cotações"
-                        onClick={() => setCotacoesItem({ tipo:'benfeitoria', id:i.id, nome:i.sistema })}>
+                        onClick={e => { e.stopPropagation(); setCotacoesItem({ tipo:'benfeitoria', id:i.id, nome:i.sistema }) }}>
                         <i className="fa-solid fa-chart-column"></i>
                       </button>
-                      <button className="btn btn-sm btn-danger" title="Excluir" onClick={() => excluir(i)}>
+                      <button className="btn btn-sm btn-danger" title="Excluir" onClick={e => { e.stopPropagation(); excluir(i) }}>
                         <i className="fa-solid fa-trash"></i>
                       </button>
                     </td>
@@ -228,37 +266,19 @@ export default function Benfeitorias({ perfil }) {
 
       {modal && (
         <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setModal(null)}>
-          <div className="modal">
+          <div className="modal" style={{width:560, maxWidth:'95vw'}}>
             <h3>{modal==='novo' ? 'Nova benfeitoria' : 'Editar benfeitoria'}</h3>
+
             <div className="form-group">
               <label>Número {modal==='novo' && <span style={{color:'var(--texto-ter)'}}>(automático)</span>}</label>
-              <input value={form.num||''} readOnly style={{background:'var(--cinza-bg)',color:'var(--texto-sec)',cursor:'not-allowed'}}/>
+              <input value={form.num||''} readOnly style={inputBloqueadoStyle}/>
             </div>
-            <div className="form-group"><label>Sistema / Item</label><input value={form.sistema||''} onChange={e => setForm({...form,sistema:e.target.value})}/></div>
-            <div className="form-group"><label>Responsável (detalhe)</label><input value={form.responsavel||''} onChange={e => setForm({...form,responsavel:e.target.value})}/></div>
+
             <div className="form-group">
-              <label>Período</label>
-              <select value={form.periodo||''} onChange={e => setForm({...form, periodo: e.target.value || null})}>
-                <option value="">— selecione —</option>
-                {PERIODOS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+              <label>Sistema / Item</label>
+              <input value={form.sistema||''} onChange={e => setForm({...form,sistema:e.target.value})}/>
             </div>
-            <div style={{display:'flex',gap:8}}>
-              <div className="form-group" style={{flex:1}}>
-                <label>Previsto</label>
-                <input type="date" value={form.previsto ? String(form.previsto).slice(0,10) : ''} onChange={e => setForm({...form, previsto: e.target.value || null})}/>
-              </div>
-              <div className="form-group" style={{flex:1}}>
-                <label>Realizado</label>
-                <input type="date" value={form.realizado ? String(form.realizado).slice(0,10) : ''} onChange={e => setForm({...form, realizado: e.target.value || null})}/>
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Valor (R$) — realizado/pago</label>
-              <input type="text" inputMode="numeric" placeholder="R$ 0,00"
-                value={moedaInputValue(form.valor)}
-                onChange={e => setForm({...form, valor: digitsToNum(e.target.value)})}/>
-            </div>
+
             <div className="form-group">
               <label>Categoria</label>
               {!adicionandoCat ? (
@@ -282,6 +302,47 @@ export default function Benfeitorias({ perfil }) {
                 </div>
               )}
             </div>
+
+            <div className="form-group">
+              <label>Período</label>
+              <select value={form.periodo||''} onChange={e => setForm({...form, periodo: e.target.value || null})}>
+                <option value="">— selecione —</option>
+                {PERIODOS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+
+            <div style={{display:'flex',gap:8}}>
+              <div className="form-group" style={{flex:1}}>
+                <label>Valor previsto</label>
+                <input type="text" inputMode="numeric" placeholder="R$ 0,00"
+                  value={moedaInputValue(form.valor_previsto)}
+                  onChange={e => setForm({...form, valor_previsto: digitsToNum(e.target.value)})}/>
+              </div>
+              <div className="form-group" style={{flex:1}}>
+                <label>Valor realizado <span style={{color:'var(--texto-ter)',fontSize:11}}>(via Mapa)</span></label>
+                <input type="text" readOnly style={inputBloqueadoStyle}
+                  value={moedaInputValue(form.valor_realizado || form.valor)} placeholder="—"/>
+              </div>
+            </div>
+
+            <div style={{display:'flex',gap:8}}>
+              <div className="form-group" style={{flex:1}}>
+                <label>Início previsto</label>
+                <input type="date" value={form.previsto ? String(form.previsto).slice(0,10) : ''}
+                  onChange={e => setForm({...form, previsto: e.target.value || null})}/>
+              </div>
+              <div className="form-group" style={{flex:1}}>
+                <label>Início real <span style={{color:'var(--texto-ter)',fontSize:11}}>(quando iniciar)</span></label>
+                <input type="date" value={form.data_inicio_real ? String(form.data_inicio_real).slice(0,10) : ''}
+                  onChange={e => setForm({...form, data_inicio_real: e.target.value || null})}/>
+              </div>
+              <div className="form-group" style={{flex:1}}>
+                <label>Realizado <span style={{color:'var(--texto-ter)',fontSize:11}}>(via App)</span></label>
+                <input type="date" readOnly style={inputBloqueadoStyle}
+                  value={form.realizado ? String(form.realizado).slice(0,10) : ''}/>
+              </div>
+            </div>
+
             <div className="form-group">
               <label>Prioridade</label>
               <select value={form.prioridade||'BENFEITORIA'} onChange={e => setForm({...form,prioridade:e.target.value})}>
@@ -333,17 +394,18 @@ export default function Benfeitorias({ perfil }) {
             onFechar={() => setVerItem(null)}
             onEditar={() => { abrirEditar(verItem); setVerItem(null) }}
             campos={[
-              { label:'Número',         valor:verItem.num },
-              { label:'Categoria',      valor:cat?.nome },
-              { label:'Prioridade',     valor:verItem.prioridade },
-              { label:'Período',        valor:verItem.periodo },
-              { label:'Responsável',    valor:verItem.responsavel_tipo },
-              { label:'Resp. detalhe',  valor:verItem.responsavel },
-              { label:'Recorrência',    valor:verItem.recorrencia },
-              { label:'Previsto',       valor:verItem.previsto, tipo:'data' },
-              { label:'Realizado',      valor:verItem.realizado, tipo:'data' },
-              { label:'Valor',          valor:verItem.valor, tipo:'moeda' },
-              { label:'Observações',    valor:verItem.obs, tipo:'longtext' },
+              { label:'Número',          valor:verItem.num },
+              { label:'Categoria',       valor:cat?.nome },
+              { label:'Prioridade',      valor:verItem.prioridade },
+              { label:'Período',         valor:verItem.periodo },
+              { label:'Responsável',     valor:verItem.responsavel_tipo },
+              { label:'Recorrência',     valor:verItem.recorrencia },
+              { label:'Valor previsto',  valor:verItem.valor_previsto, tipo:'moeda' },
+              { label:'Valor realizado', valor:verItem.valor_realizado || verItem.valor, tipo:'moeda' },
+              { label:'Início previsto', valor:verItem.previsto, tipo:'data' },
+              { label:'Início real',     valor:verItem.data_inicio_real, tipo:'data' },
+              { label:'Realizado',       valor:verItem.realizado, tipo:'data' },
+              { label:'Observações',     valor:verItem.obs, tipo:'longtext' },
             ]}
           />
         )

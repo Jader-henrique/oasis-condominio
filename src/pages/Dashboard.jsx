@@ -108,16 +108,16 @@ export default function Dashboard({ perfil }) {
     const noPeriodo = lista.filter(i => dentroPeriodo(dataFn(i)))
     const realizados = noPeriodo.filter(statusFn)
     const pendentes = noPeriodo.filter(i => !statusFn(i))
-    const valor = noPeriodo.reduce((s,i) => s + (parseFloat(i.valor)||0), 0)
+    const valor = noPeriodo.reduce((s,i) => s + (parseFloat(i.valor_realizado || i.valor)||0), 0)
     const hoje = new Date().toISOString().slice(0,10)
     const noPrazo  = pendentes.filter(i => { const dp = dataFn(i); return dp && dp >= hoje }).length
     const atrasados = pendentes.filter(i => { const dp = dataFn(i); return dp && dp < hoje }).length
     return { total:noPeriodo.length, realizados:realizados.length, pendentes:pendentes.length, valor, noPrazo, atrasados }
   }
 
-  const cardsAt = calcCards(atividades,   i => i.proxima_data || i.realizado_em?.slice(0,10), i => i.status==='realizado')
-  const cardsCor= calcCards(corretivas,   i => i.data_inicio || i.data_fim,                    i => i.status==='realizado')
-  const cardsBen= calcCards(benfeitorias, i => i.previsto || i.realizado,                       i => !!i.realizado)
+  const cardsAt = calcCards(atividades,   i => i.proxima_data || i.realizado_em?.slice(0,10),     i => i.status==='realizado')
+  const cardsCor= calcCards(corretivas,   i => i.data_inicio_prevista || i.data_inicio_real || i.data_fim, i => i.status==='realizado')
+  const cardsBen= calcCards(benfeitorias, i => i.previsto || i.data_inicio_real || i.realizado,            i => !!i.realizado)
 
   // Contagens por responsável (sem filtro de período — total absoluto)
   function porResponsavel(lista) {

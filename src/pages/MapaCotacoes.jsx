@@ -95,10 +95,8 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
         status: 'andamento'
       }
     } else if (tipo === 'benfeitoria') {
-      update = {
-        valor: orc.valor,
-        previsto: orc.data || new Date().toISOString().slice(0,10)
-      }
+      // Para benfeitoria: preenche valor_realizado, NÃO sobrescreve previsto (que é início previsto definido na criação)
+      update = { valor_realizado: orc.valor }
     } else {
       // atividade
       update = { valor: orc.valor }
@@ -131,6 +129,8 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
     let update = {}
     if (tipo === 'corretiva') {
       update = { empresa: null, valor_realizado: null, status: 'pendente' }
+    } else if (tipo === 'benfeitoria') {
+      update = { valor_realizado: null }
     } else {
       update = { valor: null }
     }
