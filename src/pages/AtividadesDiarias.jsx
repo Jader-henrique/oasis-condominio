@@ -213,13 +213,29 @@ export default function AtividadesDiarias({ perfil }) {
             </div>
             <div className="form-group"><label>Descrição</label><input value={form.descricao||''} onChange={e => setForm({...form,descricao:e.target.value})}/></div>
             <div className="form-group">
-              <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
+              <label style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',justifyContent:'flex-start'}}>
+                <span style={{
+                  position:'relative', display:'inline-block', width:38, height:20,
+                  background: form.pontual ? 'var(--azul)' : 'var(--borda)',
+                  borderRadius: 10, transition: 'background 0.2s',
+                  flexShrink: 0
+                }}>
+                  <span style={{
+                    position:'absolute', top:2, left: form.pontual ? 20 : 2,
+                    width:16, height:16, background:'#fff', borderRadius:'50%',
+                    transition: 'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.25)'
+                  }}/>
+                </span>
                 <input type="checkbox" checked={!!form.pontual}
                   onChange={e => {
                     const p = e.target.checked
-                    setForm({...form, pontual:p, frequencia: p ? null : 'Mensal', proxima_data: p ? null : form.proxima_data})
-                  }}/>
-                <span>Atividade pontual <span style={{color:'var(--texto-ter)',fontSize:11}}>(não recorrente — gera apenas um evento)</span></span>
+                    // Pontual: zera frequência mas mantém data se foi preenchida
+                    setForm({...form, pontual:p, frequencia: p ? null : (form.frequencia || 'Mensal')})
+                  }}
+                  style={{position:'absolute',opacity:0,width:0,height:0,pointerEvents:'none'}}/>
+                <span style={{fontSize:13}}>
+                  Atividade pontual <span style={{color:'var(--texto-ter)',fontSize:11}}>(não gera recorrência no calendário)</span>
+                </span>
               </label>
             </div>
             <div className="form-group">
@@ -231,9 +247,8 @@ export default function AtividadesDiarias({ perfil }) {
               </select>
             </div>
             <div className="form-group">
-              <label>Próxima data prevista {form.pontual && <span style={{color:'var(--texto-ter)',fontSize:11}}>(N/A para pontual)</span>}</label>
-              <input type="date" disabled={!!form.pontual}
-                style={form.pontual ? {background:'var(--cinza-bg)',color:'var(--texto-ter)',cursor:'not-allowed'} : undefined}
+              <label>{form.pontual ? 'Data prevista' : 'Próxima data prevista'}</label>
+              <input type="date"
                 value={form.proxima_data ? String(form.proxima_data).slice(0,10) : ''}
                 onChange={e => setForm({...form, proxima_data: e.target.value || null})}/>
             </div>
