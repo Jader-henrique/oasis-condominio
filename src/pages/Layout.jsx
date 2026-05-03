@@ -27,6 +27,7 @@ const MENU = [
 export default function Layout({ perfil }) {
   // Sistema abre sempre pelo Dashboard
   const [pagina, setPagina] = useState('dashboard')
+  const [modoVistorias, setModoVistorias] = useState(false)
 
   const PAGINAS = {
     dashboard:    <Dashboard perfil={perfil} />,
@@ -46,6 +47,21 @@ export default function Layout({ perfil }) {
 
   if (isZelador)   return <AppZelador perfil={perfil}/>
   if (isVistorias) return <AppVistorias perfil={perfil}/>
+
+  // Síndico/Admin pode entrar no modo Vistorias temporariamente
+  if (modoVistorias && isAdmin) return (
+    <div>
+      <div style={{position:'sticky', top:0, zIndex:50, background:'var(--lilas)', color:'#fff', padding:'8px 16px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+        <div style={{fontSize:13, fontWeight:500}}>
+          <i className="fa-solid fa-clipboard-check" style={{marginRight:8}}></i>Modo Vistorias
+        </div>
+        <button onClick={() => setModoVistorias(false)} style={{background:'rgba(255,255,255,0.2)', color:'#fff', border:'none', padding:'5px 12px', borderRadius:6, fontSize:12, cursor:'pointer'}}>
+          <i className="fa-solid fa-arrow-left" style={{marginRight:6}}></i>Voltar à plataforma
+        </button>
+      </div>
+      <AppVistorias perfil={perfil}/>
+    </div>
+  )
 
   return (
     <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column' }}>
@@ -72,6 +88,12 @@ export default function Layout({ perfil }) {
               {perfil?.perfil === 'admin' ? 'Administrador' : perfil?.perfil === 'sindico' ? 'Síndico' : perfil?.perfil === 'zelador' ? 'Zelador' : perfil?.perfil === 'vistorias' ? 'Vistorias' : 'Condômino'}
             </span>
           </span>
+          {isAdmin && (
+            <button className="btn" style={{ background:'rgba(255,255,255,0.15)', color:'#fff', borderColor:'rgba(255,255,255,0.3)', fontSize:12, padding:'4px 10px' }}
+              onClick={() => setModoVistorias(true)} title="Entrar no modo Vistorias (mobile)">
+              <i className="fa-solid fa-clipboard-check" style={{marginRight:6}}></i>Vistorias
+            </button>
+          )}
           <button className="btn" style={{ background:'rgba(255,255,255,0.15)', color:'#fff', borderColor:'rgba(255,255,255,0.3)', fontSize:12, padding:'4px 10px' }}
             onClick={() => supabase.auth.signOut()}>
             Sair
