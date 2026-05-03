@@ -20,6 +20,10 @@ export default function Publicacoes({ perfil }) {
   const [arquivo, setArquivo] = useState(null)
   const [salvando, setSalvando] = useState(false)
   const [verItem, setVerItem] = useState(null)
+  const [filtroTipo, setFiltroTipo] = useState('Todos')
+  const [filtroTitulo, setFiltroTitulo] = useState('')
+  const [filtroDataIni, setFiltroDataIni] = useState('')
+  const [filtroDataFim, setFiltroDataFim] = useState('')
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
 
   useEffect(() => { carregar() }, [])
@@ -89,8 +93,16 @@ export default function Publicacoes({ perfil }) {
     }
   }
 
+  const itensFiltrados = itens.filter(p => {
+    if (filtroTipo !== 'Todos' && p.tipo !== filtroTipo) return false
+    if (filtroTitulo && !String(p.titulo||'').toLowerCase().includes(filtroTitulo.toLowerCase())) return false
+    if (filtroDataIni && p.data && p.data < filtroDataIni) return false
+    if (filtroDataFim && p.data && p.data > filtroDataFim) return false
+    return true
+  })
+
   function exportar() {
-    const dados = itens.map(p => ({
+    const dados = itensFiltrados.map(p => ({
       Título: p.titulo,
       Tipo: p.tipo,
       Data: fmtData(p.data),
@@ -104,14 +116,36 @@ export default function Publicacoes({ perfil }) {
       <div className="page-title">Publicações</div>
       <div className="page-sub">Atas, aprovações, projetos e documentos do condomínio</div>
 
-      <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+      <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'flex-end'}}>
         {isAdmin && <button className="btn btn-success" onClick={abrirNovo}>+ Adicionar publicação</button>}
-        <button className="btn btn-sm" onClick={exportar}><i className="fa-solid fa-file-excel" style={{marginRight:6}}></i>Exportar Excel</button>
+        <div className="form-group" style={{marginBottom:0,minWidth:140}}>
+          <label style={{fontSize:10,color:'var(--texto-ter)'}}>Tipo</label>
+          <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{padding:'6px 8px'}}>
+            <option value="Todos">Todos</option>
+            {TIPOS.map(t => <option key={t}>{t}</option>)}
+          </select>
+        </div>
+        <div className="form-group" style={{marginBottom:0,minWidth:160}}>
+          <label style={{fontSize:10,color:'var(--texto-ter)'}}>Título contém</label>
+          <input value={filtroTitulo} onChange={e => setFiltroTitulo(e.target.value)} placeholder="palavra..." style={{padding:'6px 8px'}}/>
+        </div>
+        <div className="form-group" style={{marginBottom:0,minWidth:130}}>
+          <label style={{fontSize:10,color:'var(--texto-ter)'}}>Data de</label>
+          <input type="date" value={filtroDataIni} onChange={e => setFiltroDataIni(e.target.value)} style={{padding:'6px 8px'}}/>
+        </div>
+        <div className="form-group" style={{marginBottom:0,minWidth:130}}>
+          <label style={{fontSize:10,color:'var(--texto-ter)'}}>até</label>
+          <input type="date" value={filtroDataFim} onChange={e => setFiltroDataFim(e.target.value)} style={{padding:'6px 8px'}}/>
+        </div>
+        {(filtroTipo!=='Todos'||filtroTitulo||filtroDataIni||filtroDataFim) && (
+          <button className="btn btn-sm" onClick={() => { setFiltroTipo('Todos'); setFiltroTitulo(''); setFiltroDataIni(''); setFiltroDataFim('') }}>Limpar filtros</button>
+        )}
+        <button className="btn btn-sm" onClick={exportar} style={{marginLeft:'auto'}}><i className="fa-solid fa-file-excel" style={{marginRight:6}}></i>Exportar Excel</button>
       </div>
 
-      {itens.length === 0 && <div className="card" style={{textAlign:'center',color:'var(--texto-ter)'}}>Nenhuma publicação</div>}
+      {itensFiltrados.length === 0 && <div className="card" style={{textAlign:'center',color:'var(--texto-ter)'}}>Nenhuma publicação</div>}
 
-      {itens.map(p => (
+      {itensFiltrados.map(p => (
         <div className="card card-azul" key={p.id} onDoubleClick={() => setVerItem(p)} style={{cursor:'pointer'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div>

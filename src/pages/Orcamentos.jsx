@@ -206,7 +206,7 @@ export default function Orcamentos({ perfil }) {
 
   return (
     <div>
-      <div className="page-title">Orçamentos</div>
+      <div className="page-title">Orçamentos de Fornecedores</div>
       <div className="page-sub">Cotações vinculadas a atividades, intervenções corretivas e benfeitorias</div>
 
       <div className="stat-grid">

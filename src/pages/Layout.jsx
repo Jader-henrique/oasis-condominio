@@ -18,7 +18,7 @@ const MENU = [
   { id:'corretivas',   label:'Intervenções Corretivas' },
   { id:'benfeitorias', label:'Benfeitorias' },
   { id:'calendario',   label:'Calendário' },
-  { id:'orcamentos',   label:'Orçamentos' },
+  { id:'orcamentos',   label:'Orçamentos de Fornecedores' },
   { id:'diario',       label:'Diário de Manutenções' },
   { id:'solicitacoes', label:'Solicitações de Morador' },
   { id:'publicacoes',  label:'Publicações' },

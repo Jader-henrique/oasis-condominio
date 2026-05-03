@@ -17,6 +17,10 @@ export default function Solicitacoes({ perfil }) {
   const [arquivos, setArquivos] = useState([])
   const [salvando, setSalvando] = useState(false)
   const [filtroStatus, setFiltroStatus] = useState('todas')
+  const [filtroMorador, setFiltroMorador] = useState('Todos')
+  const [filtroPalavra, setFiltroPalavra] = useState('')
+  const [filtroDataIni, setFiltroDataIni] = useState('')
+  const [filtroDataFim, setFiltroDataFim] = useState('')
 
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
   const isMorador = perfil?.perfil === 'condomino' || (!isAdmin && perfil?.perfil !== 'zelador' && perfil?.perfil !== 'vistorias')
@@ -74,7 +78,19 @@ export default function Solicitacoes({ perfil }) {
     carregar()
   }
 
-  const filtradas = itens.filter(i => filtroStatus === 'todas' || i.status === filtroStatus)
+  const moradoresUnicos = Array.from(new Set(itens.map(i => i.morador_nome).filter(Boolean))).sort()
+  const filtradas = itens.filter(i => {
+    if (filtroStatus !== 'todas' && i.status !== filtroStatus) return false
+    if (filtroMorador !== 'Todos' && i.morador_nome !== filtroMorador) return false
+    if (filtroPalavra) {
+      const k = filtroPalavra.toLowerCase()
+      const txt = (i.texto||'') + ' ' + (i.resposta||'')
+      if (!txt.toLowerCase().includes(k)) return false
+    }
+    if (filtroDataIni && i.criado_em && String(i.criado_em).slice(0,10) < filtroDataIni) return false
+    if (filtroDataFim && i.criado_em && String(i.criado_em).slice(0,10) > filtroDataFim) return false
+    return true
+  })
   const abertas = itens.filter(i => i.status === 'aberta').length
   const respondidas = itens.filter(i => i.status === 'respondida').length
 
@@ -103,7 +119,7 @@ export default function Solicitacoes({ perfil }) {
         <div className="stat"><div className="stat-n" style={{color:'var(--verde)'}}>{itens.filter(i=>i.status==='encerrada').length}</div><div className="stat-l">Encerradas</div></div>
       </div>
 
-      <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
+      <div style={{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap',alignItems:'center'}}>
         <button className="btn btn-success" onClick={abrirNova}><i className="fa-solid fa-plus" style={{marginRight:6}}></i>Nova solicitação</button>
         <div style={{display:'flex',gap:4}}>
           {[['todas','Todas'],['aberta','Abertas'],['respondida','Respondidas'],['encerrada','Encerradas']].map(([v,l]) => (
@@ -118,6 +134,33 @@ export default function Solicitacoes({ perfil }) {
         <button className="btn btn-sm" onClick={exportar} style={{marginLeft:'auto'}}>
           <i className="fa-solid fa-file-excel" style={{marginRight:6}}></i>Exportar
         </button>
+      </div>
+
+      <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'flex-end'}}>
+        {isAdmin && (
+          <div className="form-group" style={{marginBottom:0,minWidth:160}}>
+            <label style={{fontSize:10,color:'var(--texto-ter)'}}>Morador</label>
+            <select value={filtroMorador} onChange={e => setFiltroMorador(e.target.value)} style={{padding:'6px 8px'}}>
+              <option value="Todos">Todos</option>
+              {moradoresUnicos.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+        )}
+        <div className="form-group" style={{marginBottom:0,minWidth:200,flex:1}}>
+          <label style={{fontSize:10,color:'var(--texto-ter)'}}>Palavra-chave</label>
+          <input value={filtroPalavra} onChange={e => setFiltroPalavra(e.target.value)} placeholder="busca no texto e resposta..." style={{padding:'6px 8px'}}/>
+        </div>
+        <div className="form-group" style={{marginBottom:0,minWidth:130}}>
+          <label style={{fontSize:10,color:'var(--texto-ter)'}}>Data de</label>
+          <input type="date" value={filtroDataIni} onChange={e => setFiltroDataIni(e.target.value)} style={{padding:'6px 8px'}}/>
+        </div>
+        <div className="form-group" style={{marginBottom:0,minWidth:130}}>
+          <label style={{fontSize:10,color:'var(--texto-ter)'}}>até</label>
+          <input type="date" value={filtroDataFim} onChange={e => setFiltroDataFim(e.target.value)} style={{padding:'6px 8px'}}/>
+        </div>
+        {(filtroMorador!=='Todos'||filtroPalavra||filtroDataIni||filtroDataFim) && (
+          <button className="btn btn-sm" onClick={() => { setFiltroMorador('Todos'); setFiltroPalavra(''); setFiltroDataIni(''); setFiltroDataFim('') }}>Limpar</button>
+        )}
       </div>
 
       {filtradas.length === 0 && <div className="card" style={{textAlign:'center',color:'var(--texto-ter)'}}>Nenhuma solicitação</div>}
