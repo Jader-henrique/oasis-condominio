@@ -108,11 +108,12 @@ export default function Dashboard({ perfil }) {
     const noPeriodo = lista.filter(i => dentroPeriodo(dataFn(i)))
     const realizados = noPeriodo.filter(statusFn)
     const pendentes = noPeriodo.filter(i => !statusFn(i))
-    const valor = noPeriodo.reduce((s,i) => s + (parseFloat(i.valor_realizado || i.valor)||0), 0)
+    const valorPrevisto  = noPeriodo.reduce((s,i) => s + (parseFloat(i.valor_previsto)||0), 0)
+    const valorRealizado = noPeriodo.reduce((s,i) => s + (parseFloat(i.valor_realizado || i.valor)||0), 0)
     const hoje = new Date().toISOString().slice(0,10)
     const noPrazo  = pendentes.filter(i => { const dp = dataFn(i); return dp && dp >= hoje }).length
     const atrasados = pendentes.filter(i => { const dp = dataFn(i); return dp && dp < hoje }).length
-    return { total:noPeriodo.length, realizados:realizados.length, pendentes:pendentes.length, valor, noPrazo, atrasados }
+    return { total:noPeriodo.length, realizados:realizados.length, pendentes:pendentes.length, valorPrevisto, valorRealizado, valor:valorRealizado, noPrazo, atrasados }
   }
 
   const cardsAt = calcCards(atividades,   i => i.proxima_data || i.realizado_em?.slice(0,10),     i => i.status==='realizado')
@@ -231,7 +232,8 @@ export default function Dashboard({ perfil }) {
         <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10}}>
           <CardSplit titulo="Atividades cadastradas" total={respAt.total} zelador={respAt.zelador} sindico={respAt.sindico} cor="var(--azul)"/>
           <CardStat titulo="Pendentes / Realizados (período)" valor={`${cardsAt.pendentes} / ${cardsAt.realizados}`}/>
-          <CardStat titulo="Valor" valor={fmtMoeda(cardsAt.valor)} cor="var(--azul)"/>
+          <CardStat titulo="Vlr Previsto" valor={fmtMoeda(cardsAt.valorPrevisto)} cor="var(--azul)"/>
+          <CardStat titulo="Vlr Realizado" valor={fmtMoeda(cardsAt.valorRealizado)} cor="var(--verde)"/>
           <CardStat titulo="No prazo" valor={cardsAt.noPrazo} cor="var(--verde)"/>
           <CardStat titulo="Atrasados" valor={cardsAt.atrasados} cor="var(--vermelho)"/>
         </div>
@@ -241,7 +243,8 @@ export default function Dashboard({ perfil }) {
         <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10}}>
           <CardSplit titulo="Corretivas cadastradas" total={respCor.total} zelador={respCor.zelador} sindico={respCor.sindico} cor="var(--vermelho)"/>
           <CardStat titulo="Pendentes / Realizadas (período)" valor={`${cardsCor.pendentes} / ${cardsCor.realizados}`}/>
-          <CardStat titulo="Valor" valor={fmtMoeda(cardsCor.valor)} cor="var(--vermelho)"/>
+          <CardStat titulo="Vlr Previsto" valor={fmtMoeda(cardsCor.valorPrevisto)} cor="var(--vermelho)"/>
+          <CardStat titulo="Vlr Realizado" valor={fmtMoeda(cardsCor.valorRealizado)} cor="var(--verde)"/>
           <CardStat titulo="No prazo" valor={cardsCor.noPrazo} cor="var(--verde)"/>
           <CardStat titulo="Atrasadas" valor={cardsCor.atrasados} cor="var(--vermelho)"/>
         </div>
@@ -251,7 +254,8 @@ export default function Dashboard({ perfil }) {
         <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10}}>
           <CardSplit titulo="Benfeitorias cadastradas" total={respBen.total} zelador={respBen.zelador} sindico={respBen.sindico} cor="var(--lilas)"/>
           <CardStat titulo="Pendentes / Realizadas (período)" valor={`${cardsBen.pendentes} / ${cardsBen.realizados}`}/>
-          <CardStat titulo="Valor" valor={fmtMoeda(cardsBen.valor)} cor="var(--lilas)"/>
+          <CardStat titulo="Vlr Previsto" valor={fmtMoeda(cardsBen.valorPrevisto)} cor="var(--lilas)"/>
+          <CardStat titulo="Vlr Realizado" valor={fmtMoeda(cardsBen.valorRealizado)} cor="var(--verde)"/>
           <CardStat titulo="No prazo" valor={cardsBen.noPrazo} cor="var(--verde)"/>
           <CardStat titulo="Atrasadas" valor={cardsBen.atrasados} cor="var(--vermelho)"/>
         </div>

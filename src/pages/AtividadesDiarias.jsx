@@ -23,6 +23,19 @@ function fmtMoeda(v) {
   return num.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
 }
 
+
+function digitsToNum(str) {
+  const digits = String(str ?? '').replace(/\D/g, '')
+  if (!digits) return null
+  return parseInt(digits, 10) / 100
+}
+function moedaInputValue(v) {
+  if (v === null || v === undefined || v === '') return ''
+  const num = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'))
+  if (isNaN(num)) return ''
+  return num.toLocaleString('pt-BR', { style:'currency', currency:'BRL', minimumFractionDigits:2 })
+}
+
 export default function AtividadesDiarias({ perfil }) {
   const [itens, setItens] = useState([])
   const [modal, setModal] = useState(null)
@@ -53,7 +66,7 @@ export default function AtividadesDiarias({ perfil }) {
     return Math.max(...itens.map(i => parseInt(i.num) || 0)) + 1
   }
   function abrirNovo() {
-    setForm({ num:String(proximoNum()), descricao:'', frequencia:'Mensal', mes:'', status:'nrealizado', responsavel_tipo:'Zeladoria', valor:null, proxima_data:null, pontual:false, conta_id:null })
+    setForm({ num:String(proximoNum()), descricao:'', frequencia:'Mensal', mes:'', status:'nrealizado', responsavel_tipo:'Zeladoria', valor_previsto:null, valor_realizado:null, proxima_data:null, pontual:false, conta_id:null })
     setArquivo(null); setModal('novo')
   }
   function abrirEditar(item) { setForm({ ...item }); setArquivo(null); setModal('editar') }
@@ -175,7 +188,8 @@ export default function AtividadesDiarias({ perfil }) {
               <SortableTh col="responsavel_tipo" label="Responsável" sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               <SortableTh col="status"           label="Status"      sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               <SortableTh col="proxima_data"     label="Próxima"     sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
-              <SortableTh col="valor"            label="Valor"       sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="valor_previsto"  label="Vlr Previsto"  sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="valor_realizado" label="Vlr Realizado" sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               {isAdmin && <th></th>}
             </tr>
           </thead>
@@ -201,7 +215,8 @@ export default function AtividadesDiarias({ perfil }) {
                     : <span className="badge badge-pendente">Pendente</span>}
                 </td>
                 <td>{c.proxima_data ? fmtDataBR(c.proxima_data) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
-                <td style={{whiteSpace:'nowrap',fontWeight:500}}>{c.valor != null ? fmtMoeda(c.valor) : <span style={{color:'var(--texto-ter)',fontWeight:400}}>—</span>}</td>
+                <td style={{whiteSpace:'nowrap'}}>{c.valor_previsto != null ? fmtMoeda(c.valor_previsto) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
+                <td style={{whiteSpace:'nowrap',fontWeight:500,color:'var(--verde)'}}>{(c.valor_realizado != null || c.valor != null) ? fmtMoeda(c.valor_realizado || c.valor) : <span style={{color:'var(--texto-ter)',fontWeight:400}}>—</span>}</td>
                 {isAdmin && (
                   <td style={{display:'flex',gap:4}}>
                     <button className="btn btn-sm" onClick={() => abrirEditar(c)}>Editar</button>
@@ -270,6 +285,21 @@ export default function AtividadesDiarias({ perfil }) {
                 value={form.proxima_data ? String(form.proxima_data).slice(0,10) : ''}
                 onChange={e => setForm({...form, proxima_data: e.target.value || null})}/>
             </div>
+            <div style={{display:'flex',gap:8}}>
+              <div className="form-group" style={{flex:1}}>
+                <label>Valor previsto</label>
+                <input type="text" inputMode="numeric" placeholder="R$ 0,00"
+                  value={moedaInputValue(form.valor_previsto)}
+                  onChange={e => setForm({...form, valor_previsto: digitsToNum(e.target.value)})}/>
+              </div>
+              <div className="form-group" style={{flex:1}}>
+                <label>Valor realizado <span style={{color:'var(--texto-ter)',fontSize:11}}>(via Mapa)</span></label>
+                <input type="text" readOnly
+                  style={{background:'var(--cinza-bg)',color:'var(--texto-sec)',cursor:'not-allowed'}}
+                  value={moedaInputValue(form.valor_realizado || form.valor)} placeholder="—"/>
+              </div>
+            </div>
+
             <div className="form-group">
               <label>Conta orçamentária / contábil</label>
               {form.conta_id ? (

@@ -99,7 +99,7 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
       update = { valor_realizado: orc.valor }
     } else {
       // atividade
-      update = { valor: orc.valor }
+      update = { valor_realizado: orc.valor }
     }
     await supabase.from(tabela).update(update).eq('id', itemId)
     setSalvando(false); setFecharForm(null); carregar()
@@ -132,7 +132,7 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
     } else if (tipo === 'benfeitoria') {
       update = { valor_realizado: null }
     } else {
-      update = { valor: null }
+      update = { valor_realizado: null }
     }
     await supabase.from(tabela).update(update).eq('id', itemId)
     setSalvando(false); carregar()
