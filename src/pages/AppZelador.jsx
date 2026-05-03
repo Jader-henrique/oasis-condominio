@@ -69,14 +69,17 @@ export default function AppZelador({ perfil }) {
     const hoje = hojeISO()
     // Atualiza item na tabela origem
     if (form._origem === 'atividade') {
-      const dias = DIAS_FREQ[form._frequencia]
+      // Pontual não recalcula proxima_data
+      const ehPontual = !!form.pontual
+      const dias = ehPontual ? null : DIAS_FREQ[form._frequencia]
       const proxima = dias ? addDias(hoje, dias) : null
-      await supabase.from('calendario').update({
+      const updateAt = {
         status:'realizado', realizado_em:new Date().toISOString(),
         realizado_por: perfil?.nome || 'Zelador',
-        evidencia_url: urls[0] || form.evidencia_url || '',
-        proxima_data: proxima
-      }).eq('id', form._id)
+        evidencia_url: urls[0] || form.evidencia_url || ''
+      }
+      if (!ehPontual) updateAt.proxima_data = proxima
+      await supabase.from('calendario').update(updateAt).eq('id', form._id)
     } else if (form._origem === 'corretiva') {
       await supabase.from('corretivas').update({ status:'realizado', data_fim: hoje }).eq('id', form._id)
     } else if (form._origem === 'benfeitoria') {

@@ -97,12 +97,14 @@ export default function Diario({ perfil }) {
   // Recalcula próxima ocorrência se item for recorrente
   async function recalcularProxima(itemTipo, itemId, dataExecucao) {
     if (itemTipo !== 'atividade') return  // só atividades têm frequencia explícita
-    const { data: item } = await supabase.from('calendario').select('frequencia').eq('id', itemId).single()
+    const { data: item } = await supabase.from('calendario').select('frequencia,pontual').eq('id', itemId).single()
     if (!item) return
-    const dias = DIAS_FREQ[item.frequencia]
-    if (!dias) return
-    const proxima = addDias(dataExecucao, dias)
-    await supabase.from('calendario').update({ proxima_data: proxima, status:'realizado', realizado_em: dataExecucao, realizado_por: perfil?.nome || '' }).eq('id', itemId)
+    const updateAt = { status:'realizado', realizado_em: dataExecucao, realizado_por: perfil?.nome || '' }
+    if (!item.pontual) {
+      const dias = DIAS_FREQ[item.frequencia]
+      if (dias) updateAt.proxima_data = addDias(dataExecucao, dias)
+    }
+    await supabase.from('calendario').update(updateAt).eq('id', itemId)
   }
 
   async function salvar() {

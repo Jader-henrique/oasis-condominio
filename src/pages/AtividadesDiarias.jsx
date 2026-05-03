@@ -43,7 +43,7 @@ export default function AtividadesDiarias({ perfil }) {
     return Math.max(...itens.map(i => parseInt(i.num) || 0)) + 1
   }
   function abrirNovo() {
-    setForm({ num:String(proximoNum()), descricao:'', frequencia:'Mensal', mes:'', status:'nrealizado', responsavel_tipo:'Zeladoria', valor:null, proxima_data:null })
+    setForm({ num:String(proximoNum()), descricao:'', frequencia:'Mensal', mes:'', status:'nrealizado', responsavel_tipo:'Zeladoria', valor:null, proxima_data:null, pontual:false })
     setArquivo(null); setModal('novo')
   }
   function abrirEditar(item) { setForm({ ...item }); setArquivo(null); setModal('editar') }
@@ -156,7 +156,7 @@ export default function AtividadesDiarias({ perfil }) {
         <table>
           <thead>
             <tr>
-              <th>#</th><th>Descrição</th><th>Frequência</th>
+              <th>#</th><th>Descrição</th><th>Tipo</th><th>Frequência</th>
               <th>Responsável</th><th>Status</th><th>Próxima</th><th>Valor</th>
               {isAdmin && <th></th>}
             </tr>
@@ -166,7 +166,11 @@ export default function AtividadesDiarias({ perfil }) {
               <tr key={c.id} onDoubleClick={() => setVerItem(c)} style={{cursor:'pointer'}}>
                 <td style={{color:'var(--texto-sec)'}}>{c.num}</td>
                 <td style={{fontWeight:500}}>{c.descricao}</td>
-                <td>{c.frequencia}</td>
+                <td>{c.pontual
+                  ? <span style={{fontSize:11, padding:'2px 7px', borderRadius:6, background:'var(--amarelo-bg)', color:'var(--amarelo)'}}>Pontual</span>
+                  : <span style={{fontSize:11, padding:'2px 7px', borderRadius:6, background:'var(--verde-bg)', color:'var(--verde)'}}>Recorrente</span>
+                }</td>
+                <td>{c.pontual ? <span style={{color:'var(--texto-ter)'}}>—</span> : c.frequencia}</td>
                 <td>
                   <span style={{fontSize:11, padding:'2px 7px', borderRadius:6, fontWeight:500,
                     background: c.responsavel_tipo==='Zeladoria' ? 'var(--azul-bg)' : c.responsavel_tipo==='Síndico' ? 'var(--amarelo-bg)' : 'var(--cinza-bg)',
@@ -209,14 +213,29 @@ export default function AtividadesDiarias({ perfil }) {
             </div>
             <div className="form-group"><label>Descrição</label><input value={form.descricao||''} onChange={e => setForm({...form,descricao:e.target.value})}/></div>
             <div className="form-group">
-              <label>Frequência</label>
-              <select value={form.frequencia||'Mensal'} onChange={e => setForm({...form,frequencia:e.target.value})}>
+              <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
+                <input type="checkbox" checked={!!form.pontual}
+                  onChange={e => {
+                    const p = e.target.checked
+                    setForm({...form, pontual:p, frequencia: p ? null : 'Mensal', proxima_data: p ? null : form.proxima_data})
+                  }}/>
+                <span>Atividade pontual <span style={{color:'var(--texto-ter)',fontSize:11}}>(não recorrente — gera apenas um evento)</span></span>
+              </label>
+            </div>
+            <div className="form-group">
+              <label>Frequência {form.pontual && <span style={{color:'var(--texto-ter)',fontSize:11}}>(N/A para pontual)</span>}</label>
+              <select value={form.frequencia||'Mensal'} disabled={!!form.pontual}
+                style={form.pontual ? {background:'var(--cinza-bg)',color:'var(--texto-ter)',cursor:'not-allowed'} : undefined}
+                onChange={e => setForm({...form,frequencia:e.target.value})}>
                 {FREQS.map(f => <option key={f}>{f}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label>Próxima data prevista</label>
-              <input type="date" value={form.proxima_data ? String(form.proxima_data).slice(0,10) : ''} onChange={e => setForm({...form, proxima_data: e.target.value || null})}/>
+              <label>Próxima data prevista {form.pontual && <span style={{color:'var(--texto-ter)',fontSize:11}}>(N/A para pontual)</span>}</label>
+              <input type="date" disabled={!!form.pontual}
+                style={form.pontual ? {background:'var(--cinza-bg)',color:'var(--texto-ter)',cursor:'not-allowed'} : undefined}
+                value={form.proxima_data ? String(form.proxima_data).slice(0,10) : ''}
+                onChange={e => setForm({...form, proxima_data: e.target.value || null})}/>
             </div>
             <div className="form-group">
               <label>Responsável (tipo)</label>
