@@ -36,6 +36,10 @@ function moedaInputValue(v) {
   return num.toLocaleString('pt-BR', { style:'currency', currency:'BRL', minimumFractionDigits:2 })
 }
 
+const inputBloqueadoStyle = {
+  background:'var(--cinza-bg)', color:'var(--texto-sec)', cursor:'not-allowed'
+}
+
 export default function Corretivas({ perfil }) {
   const [itens, setItens] = useState([])
   const [modal, setModal] = useState(null)
@@ -57,10 +61,16 @@ export default function Corretivas({ perfil }) {
     return Math.max(...itens.map(i => parseInt(i.num) || 0)) + 1
   }
   function abrirNovo() {
-    setForm({ num: String(proximoNum()), item:'', prioridade:'URGENTE', status:'pendente', responsavel_tipo:'Síndico', recorrencia:'Não recorrente', empresa:'', valor:null, data_inicio:null, data_fim:null, obs:'' })
+    setForm({
+      num: String(proximoNum()), item:'', prioridade:'URGENTE', status:'pendente',
+      responsavel_tipo:'Síndico', recorrencia:'Não recorrente',
+      empresa:null, valor_previsto:null, valor_realizado:null,
+      data_inicio_prevista:null, data_inicio_real:null, data_fim:null, obs:''
+    })
     setModal('novo')
   }
   function abrirEditar(item) { setForm({ ...item }); setModal('editar') }
+
   async function excluir(item) {
     if (!confirm(`Excluir "${item.item}"? Orçamentos vinculados também serão excluídos.`)) return
     try {
@@ -75,16 +85,29 @@ export default function Corretivas({ perfil }) {
 
   async function salvar() {
     try {
+      // Não permite editar empresa/valor_realizado/data_fim diretamente — esses são preenchidos via Mapa de Cotações ou App
+      const { empresa, valor_realizado, data_fim, valor, data_inicio, ...rest } = form
       const payload = {}
-      Object.keys(form).forEach(k => {
-        const v = form[k]
+      Object.keys(rest).forEach(k => {
+        const v = rest[k]
         if (v === undefined) return
-        if (v === '' && !['item','empresa'].includes(k)) return
+        if (v === '' && !['item'].includes(k)) return
         payload[k] = v
       })
+      // Se for novo, NÃO envia campos preenchidos pelo workflow
+      if (modal === 'novo') {
+        delete payload.empresa
+        delete payload.valor_realizado
+        delete payload.data_fim
+        delete payload.id
+      } else {
+        // Em edição, preserva os valores atuais (não permite alterar)
+        if (empresa !== undefined)           payload.empresa = empresa
+        if (valor_realizado !== undefined)   payload.valor_realizado = valor_realizado
+        if (data_fim !== undefined)          payload.data_fim = data_fim
+      }
       let result
       if (modal === 'novo') {
-        delete payload.id
         result = await supabase.from('corretivas').insert([payload])
       } else {
         const { id, ...resto } = payload
@@ -117,6 +140,17 @@ export default function Corretivas({ perfil }) {
     }}>{label}</button>
   )
 
+  function exportar() {
+    const dados = itensFiltrados.map(c => ({
+      Num: c.num, Intervenção: c.item, Prioridade: c.prioridade, Status: STATUS_L[c.status]||c.status,
+      Responsável: c.responsavel_tipo, Recorrência: c.recorrencia, Empresa: c.empresa||'',
+      'Valor Previsto': c.valor_previsto, 'Valor Realizado': c.valor_realizado,
+      'Início Previsto': fmtDataBR(c.data_inicio_prevista), 'Início Real': fmtDataBR(c.data_inicio_real),
+      'Conclusão': fmtDataBR(c.data_fim)
+    }))
+    exportarParaExcel(dados, 'corretivas.xlsx', 'Corretivas')
+  }
+
   return (
     <div>
       <div className="page-title">Intervenções Corretivas</div>
@@ -148,7 +182,10 @@ export default function Corretivas({ perfil }) {
         </div>
       </div>
 
-      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>{isAdmin && <button className="btn btn-success" onClick={abrirNovo}>+ Nova intervenção</button>}<button className="btn btn-sm" onClick={()=>exportarParaExcel(itensFiltrados.map(c=>({Num:c.num,Intervenção:c.item,Prioridade:c.prioridade,Status:c.status,Responsável:c.responsavel_tipo,Empresa:c.empresa,Valor:c.valor,Início:c.data_inicio,Conclusão:c.data_fim})),"corretivas.xlsx","Corretivas")}><i className="fa-solid fa-file-excel" style={{marginRight:6}}></i>Exportar Excel</button></div>
+      <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+        {isAdmin && <button className="btn btn-success" onClick={abrirNovo}>+ Nova intervenção</button>}
+        <button className="btn btn-sm" onClick={exportar}><i className="fa-solid fa-file-excel" style={{marginRight:6}}></i>Exportar Excel</button>
+      </div>
 
       <div style={{fontSize:12, color:'var(--texto-sec)', marginBottom:8}}>
         Exibindo {itensFiltrados.length} de {itens.length} itens
@@ -158,9 +195,10 @@ export default function Corretivas({ perfil }) {
         <table>
           <thead>
             <tr>
-              <th>#</th><th>Intervenção</th><th>Prioridade</th><th>Status</th>
-              <th>Responsável</th><th>Empresa</th><th>Valor</th>
-              <th>Início</th><th>Conclusão</th>
+              <th>#</th><th>Intervenção</th><th>Prio</th><th>Status</th>
+              <th>Resp.</th><th>Empresa</th>
+              <th>Vlr Previsto</th><th>Vlr Realizado</th>
+              <th>Início Prev.</th><th>Início Real</th><th>Conclusão</th>
               {isAdmin && <th></th>}
             </tr>
           </thead>
@@ -177,19 +215,21 @@ export default function Corretivas({ perfil }) {
                     color: c.responsavel_tipo==='Zeladoria' ? 'var(--azul)' : c.responsavel_tipo==='Síndico' ? 'var(--amarelo)' : 'var(--cinza)'
                   }}>{c.responsavel_tipo||'—'}</span>
                 </td>
-                <td style={{color:'var(--texto-sec)'}}>{c.empresa||'—'}</td>
-                <td style={{whiteSpace:'nowrap',fontWeight:500}}>{c.valor != null ? fmtMoeda(c.valor) : <span style={{color:'var(--texto-ter)',fontWeight:400}}>—</span>}</td>
-                <td style={{whiteSpace:'nowrap'}}>{c.data_inicio ? fmtDataBR(c.data_inicio) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
-                <td style={{whiteSpace:'nowrap'}}>{c.data_fim ? fmtDataBR(c.data_fim) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
+                <td style={{color:'var(--texto-sec)',fontSize:12}}>{c.empresa||<span style={{color:'var(--texto-ter)'}}>—</span>}</td>
+                <td style={{whiteSpace:'nowrap'}}>{c.valor_previsto != null ? fmtMoeda(c.valor_previsto) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
+                <td style={{whiteSpace:'nowrap',fontWeight:500,color:'var(--verde)'}}>{c.valor_realizado != null ? fmtMoeda(c.valor_realizado) : <span style={{color:'var(--texto-ter)',fontWeight:400}}>—</span>}</td>
+                <td style={{whiteSpace:'nowrap'}}>{c.data_inicio_prevista ? fmtDataBR(c.data_inicio_prevista) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
+                <td style={{whiteSpace:'nowrap'}}>{c.data_inicio_real ? fmtDataBR(c.data_inicio_real) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
+                <td style={{whiteSpace:'nowrap'}}>{c.data_fim ? <span style={{color:'var(--verde)',fontWeight:500}}>{fmtDataBR(c.data_fim)}</span> : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
                 {isAdmin && (
                   <td style={{display:'flex',gap:4}}>
-                    <button className="btn btn-sm" onClick={() => abrirEditar(c)}>Editar</button>
+                    <button className="btn btn-sm" onClick={e => { e.stopPropagation(); abrirEditar(c) }}>Editar</button>
                     <button className="btn btn-sm" style={{background:'var(--azul-bg)',color:'var(--azul)',borderColor:'var(--azul)'}}
                       title="Mapa de cotações"
-                      onClick={() => setCotacoesItem({ tipo:'corretiva', id:c.id, nome:c.item })}>
+                      onClick={e => { e.stopPropagation(); setCotacoesItem({ tipo:'corretiva', id:c.id, nome:c.item }) }}>
                       <i className="fa-solid fa-chart-column"></i>
                     </button>
-                    <button className="btn btn-sm btn-danger" title="Excluir" onClick={() => excluir(c)}>
+                    <button className="btn btn-sm btn-danger" title="Excluir" onClick={e => { e.stopPropagation(); excluir(c) }}>
                       <i className="fa-solid fa-trash"></i>
                     </button>
                   </td>
@@ -202,30 +242,59 @@ export default function Corretivas({ perfil }) {
 
       {modal && (
         <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setModal(null)}>
-          <div className="modal">
+          <div className="modal" style={{width:560, maxWidth:'95vw'}}>
             <h3>{modal==='novo' ? 'Nova intervenção' : 'Editar intervenção'}</h3>
+
             <div className="form-group">
               <label>Número {modal==='novo' && <span style={{color:'var(--texto-ter)'}}>(automático)</span>}</label>
-              <input value={form.num||''} readOnly style={{background:'var(--cinza-bg)',color:'var(--texto-sec)',cursor:'not-allowed'}}/>
+              <input value={form.num||''} readOnly style={inputBloqueadoStyle}/>
             </div>
-            <div className="form-group"><label>Intervenção</label><input value={form.item||''} onChange={e => setForm({...form,item:e.target.value})}/></div>
-            <div className="form-group"><label>Empresa contratada</label><input value={form.empresa||''} onChange={e => setForm({...form,empresa:e.target.value})}/></div>
+
             <div className="form-group">
-              <label>Valor (R$)</label>
-              <input type="text" inputMode="numeric" placeholder="R$ 0,00"
-                value={moedaInputValue(form.valor)}
-                onChange={e => setForm({...form, valor: digitsToNum(e.target.value)})}/>
+              <label>Intervenção</label>
+              <input value={form.item||''} onChange={e => setForm({...form,item:e.target.value})}/>
             </div>
+
+            <div className="form-group">
+              <label>Empresa contratada <span style={{color:'var(--texto-ter)',fontSize:11}}>(definida ao fechar negócio no Mapa de Cotações)</span></label>
+              <input value={form.empresa||''} readOnly style={inputBloqueadoStyle}
+                placeholder="— ainda sem empresa —"/>
+            </div>
+
             <div style={{display:'flex',gap:8}}>
               <div className="form-group" style={{flex:1}}>
-                <label>Data início</label>
-                <input type="date" value={form.data_inicio ? String(form.data_inicio).slice(0,10) : ''} onChange={e => setForm({...form, data_inicio: e.target.value || null})}/>
+                <label>Valor previsto</label>
+                <input type="text" inputMode="numeric" placeholder="R$ 0,00"
+                  value={moedaInputValue(form.valor_previsto)}
+                  onChange={e => setForm({...form, valor_previsto: digitsToNum(e.target.value)})}/>
               </div>
               <div className="form-group" style={{flex:1}}>
-                <label>Data conclusão</label>
-                <input type="date" value={form.data_fim ? String(form.data_fim).slice(0,10) : ''} onChange={e => setForm({...form, data_fim: e.target.value || null})}/>
+                <label>Valor realizado <span style={{color:'var(--texto-ter)',fontSize:11}}>(via Mapa)</span></label>
+                <input type="text" readOnly style={inputBloqueadoStyle}
+                  value={moedaInputValue(form.valor_realizado)} placeholder="—"/>
               </div>
             </div>
+
+            <div style={{display:'flex',gap:8}}>
+              <div className="form-group" style={{flex:1}}>
+                <label>Data início prevista</label>
+                <input type="date"
+                  value={form.data_inicio_prevista ? String(form.data_inicio_prevista).slice(0,10) : ''}
+                  onChange={e => setForm({...form, data_inicio_prevista: e.target.value || null})}/>
+              </div>
+              <div className="form-group" style={{flex:1}}>
+                <label>Data início real <span style={{color:'var(--texto-ter)',fontSize:11}}>(quando iniciar)</span></label>
+                <input type="date"
+                  value={form.data_inicio_real ? String(form.data_inicio_real).slice(0,10) : ''}
+                  onChange={e => setForm({...form, data_inicio_real: e.target.value || null})}/>
+              </div>
+              <div className="form-group" style={{flex:1}}>
+                <label>Conclusão <span style={{color:'var(--texto-ter)',fontSize:11}}>(via App)</span></label>
+                <input type="date" readOnly style={inputBloqueadoStyle}
+                  value={form.data_fim ? String(form.data_fim).slice(0,10) : ''}/>
+              </div>
+            </div>
+
             <div className="form-group">
               <label>Prioridade</label>
               <select value={form.prioridade||'URGENTE'} onChange={e => setForm({...form,prioridade:e.target.value})}>
@@ -284,9 +353,11 @@ export default function Corretivas({ perfil }) {
             { label:'Responsável',    valor:verItem.responsavel_tipo },
             { label:'Recorrência',    valor:verItem.recorrencia },
             { label:'Empresa',        valor:verItem.empresa },
-            { label:'Valor',          valor:verItem.valor, tipo:'moeda' },
-            { label:'Data início',    valor:verItem.data_inicio, tipo:'data' },
-            { label:'Data conclusão', valor:verItem.data_fim, tipo:'data' },
+            { label:'Valor previsto', valor:verItem.valor_previsto, tipo:'moeda' },
+            { label:'Valor realizado',valor:verItem.valor_realizado, tipo:'moeda' },
+            { label:'Início previsto',valor:verItem.data_inicio_prevista, tipo:'data' },
+            { label:'Início real',    valor:verItem.data_inicio_real, tipo:'data' },
+            { label:'Conclusão',      valor:verItem.data_fim, tipo:'data' },
             { label:'Observações',    valor:verItem.obs, tipo:'longtext' },
           ]}
         />

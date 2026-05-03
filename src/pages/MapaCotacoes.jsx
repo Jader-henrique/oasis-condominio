@@ -86,10 +86,23 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
     await supabase.from('orcamentos').update({ selecionado:false, motivo_escolha:null }).eq('item_id', itemId).eq('item_tipo', tipo)
     await supabase.from('orcamentos').update({ selecionado:true, motivo_escolha:motivo, status:'realizado' }).eq('id', orc.id)
     const tabela = TIPO_TABELA[tipo]
-    const campoValor = TIPO_CAMPO_VALOR[tipo]
-    const update = { [campoValor]: orc.valor }
-    if (tipo === 'corretiva') update.status = 'andamento'
-    if (tipo === 'benfeitoria') update.previsto = orc.data || new Date().toISOString().slice(0,10)
+    let update = {}
+    if (tipo === 'corretiva') {
+      // Para corretivas: preenche empresa, valor_realizado e marca em andamento
+      update = {
+        empresa: orc.empresa,
+        valor_realizado: orc.valor,
+        status: 'andamento'
+      }
+    } else if (tipo === 'benfeitoria') {
+      update = {
+        valor: orc.valor,
+        previsto: orc.data || new Date().toISOString().slice(0,10)
+      }
+    } else {
+      // atividade
+      update = { valor: orc.valor }
+    }
     await supabase.from(tabela).update(update).eq('id', itemId)
     setSalvando(false); setFecharForm(null); carregar()
   }
@@ -115,8 +128,12 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
       .eq('item_id', itemId).eq('item_tipo', tipo)
     await supabase.from('orcamentos').delete().eq('item_id', itemId).eq('item_tipo', tipo).eq('sem_orcamento', true)
     const tabela = TIPO_TABELA[tipo]
-    const update = { valor: null }
-    if (tipo === 'corretiva') update.status = 'pendente'
+    let update = {}
+    if (tipo === 'corretiva') {
+      update = { empresa: null, valor_realizado: null, status: 'pendente' }
+    } else {
+      update = { valor: null }
+    }
     await supabase.from(tabela).update(update).eq('id', itemId)
     setSalvando(false); carregar()
   }

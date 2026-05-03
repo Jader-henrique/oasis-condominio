@@ -19,6 +19,50 @@ function fmtMoeda(v) {
   return (isNaN(n) ? 0 : n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
 }
 
+
+
+function Secao({ titulo, cor, bg, children }) {
+  return (
+    <div style={{
+      background: bg,
+      borderLeft: '3px solid ' + cor,
+      borderRadius: 10,
+      padding: '12px 14px',
+      marginBottom: 14
+    }}>
+      <div style={{
+        marginBottom: 10, fontSize: 12, color: cor,
+        textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600
+      }}>{titulo}</div>
+      {children}
+    </div>
+  )
+}
+
+function CardSplit({ titulo, total, zelador, sindico, terceiro, cor='var(--azul)' }) {
+  return (
+    <div className="card" style={{padding:14, gridColumn:'span 2'}}>
+      <div style={{fontSize:11, color:'var(--texto-ter)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6}}>{titulo}</div>
+      <div style={{display:'flex', alignItems:'stretch', gap:12, minHeight:78}}>
+        <div style={{flex:1, display:'flex', flexDirection:'column', justifyContent:'center'}}>
+          <div style={{fontSize:42, fontWeight:600, color:cor, lineHeight:1}}>{total}</div>
+          <div style={{fontSize:11, color:'var(--texto-sec)', marginTop:4}}>total</div>
+        </div>
+        <div style={{display:'flex', flexDirection:'column', justifyContent:'space-between', minWidth:110, borderLeft:'0.5px solid var(--borda)', paddingLeft:12}}>
+          <div>
+            <div style={{fontSize:10, color:'var(--texto-ter)', textTransform:'uppercase', letterSpacing:'0.05em'}}>Zelador</div>
+            <div style={{fontSize:18, fontWeight:500, color:'var(--azul)'}}>{zelador}</div>
+          </div>
+          <div>
+            <div style={{fontSize:10, color:'var(--texto-ter)', textTransform:'uppercase', letterSpacing:'0.05em'}}>Síndico</div>
+            <div style={{fontSize:18, fontWeight:500, color:'var(--amarelo)'}}>{sindico}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CardStat({ titulo, valor, cor='var(--texto)', sub }) {
   return (
     <div className="card" style={{padding:14}}>
@@ -74,6 +118,26 @@ export default function Dashboard({ perfil }) {
   const cardsAt = calcCards(atividades,   i => i.proxima_data || i.realizado_em?.slice(0,10), i => i.status==='realizado')
   const cardsCor= calcCards(corretivas,   i => i.data_inicio || i.data_fim,                    i => i.status==='realizado')
   const cardsBen= calcCards(benfeitorias, i => i.previsto || i.realizado,                       i => !!i.realizado)
+
+  // Contagens por responsável (sem filtro de período — total absoluto)
+  function porResponsavel(lista) {
+    return {
+      total:    lista.length,
+      zelador:  lista.filter(i => i.responsavel_tipo === 'Zeladoria').length,
+      sindico:  lista.filter(i => i.responsavel_tipo === 'Síndico').length,
+      terceiro: lista.filter(i => i.responsavel_tipo === 'Terceiro').length,
+    }
+  }
+  const respAt  = porResponsavel(atividades)
+  const respCor = porResponsavel(corretivas)
+  const respBen = porResponsavel(benfeitorias)
+
+  // Estatísticas de orçamentos
+  const orcsAtivos       = orcamentos.filter(o => !o.dispensa)
+  const orcsEmCotacao    = orcsAtivos.filter(o => !o.selecionado && !o.sem_orcamento)
+  const orcsFechados     = orcsAtivos.filter(o => o.selecionado && !o.sem_orcamento)
+  const orcsSemOrcamento = orcsAtivos.filter(o => o.sem_orcamento)
+  const valorOrcsFechados = orcsFechados.reduce((s,o) => s + (parseFloat(o.valor)||0), 0)
 
   // ---- Gráfico combinado: por mês
   const dadosMes = MESES.map((nome, idx) => {
@@ -163,36 +227,53 @@ export default function Dashboard({ perfil }) {
       </div>
 
       {/* Cards por tipo */}
-      <div style={{marginBottom:8, fontSize:12, color:'var(--texto-ter)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:500}}>Atividades do Dia a Dia</div>
-      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10, marginBottom:14}}>
-        <CardStat titulo="Pendentes / Realizados" valor={`${cardsAt.pendentes} / ${cardsAt.realizados}`} sub={`${cardsAt.total} no período`}/>
-        <CardStat titulo="Valor" valor={fmtMoeda(cardsAt.valor)} cor="var(--azul)"/>
-        <CardStat titulo="No prazo" valor={cardsAt.noPrazo} cor="var(--verde)"/>
-        <CardStat titulo="Atrasados" valor={cardsAt.atrasados} cor="var(--vermelho)"/>
-      </div>
+      <Secao titulo="Atividades do Dia a Dia" cor="var(--azul)" bg="var(--azul-bg)">
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10}}>
+          <CardSplit titulo="Atividades cadastradas" total={respAt.total} zelador={respAt.zelador} sindico={respAt.sindico} cor="var(--azul)"/>
+          <CardStat titulo="Pendentes / Realizados (período)" valor={`${cardsAt.pendentes} / ${cardsAt.realizados}`}/>
+          <CardStat titulo="Valor" valor={fmtMoeda(cardsAt.valor)} cor="var(--azul)"/>
+          <CardStat titulo="No prazo" valor={cardsAt.noPrazo} cor="var(--verde)"/>
+          <CardStat titulo="Atrasados" valor={cardsAt.atrasados} cor="var(--vermelho)"/>
+        </div>
+      </Secao>
 
-      <div style={{marginBottom:8, fontSize:12, color:'var(--texto-ter)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:500}}>Intervenções Corretivas</div>
-      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10, marginBottom:14}}>
-        <CardStat titulo="Pendentes / Realizadas" valor={`${cardsCor.pendentes} / ${cardsCor.realizados}`} sub={`${cardsCor.total} no período`}/>
-        <CardStat titulo="Valor" valor={fmtMoeda(cardsCor.valor)} cor="var(--vermelho)"/>
-        <CardStat titulo="No prazo" valor={cardsCor.noPrazo} cor="var(--verde)"/>
-        <CardStat titulo="Atrasadas" valor={cardsCor.atrasados} cor="var(--vermelho)"/>
-      </div>
+      <Secao titulo="Intervenções Corretivas" cor="var(--vermelho)" bg="var(--vermelho-bg)">
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10}}>
+          <CardSplit titulo="Corretivas cadastradas" total={respCor.total} zelador={respCor.zelador} sindico={respCor.sindico} cor="var(--vermelho)"/>
+          <CardStat titulo="Pendentes / Realizadas (período)" valor={`${cardsCor.pendentes} / ${cardsCor.realizados}`}/>
+          <CardStat titulo="Valor" valor={fmtMoeda(cardsCor.valor)} cor="var(--vermelho)"/>
+          <CardStat titulo="No prazo" valor={cardsCor.noPrazo} cor="var(--verde)"/>
+          <CardStat titulo="Atrasadas" valor={cardsCor.atrasados} cor="var(--vermelho)"/>
+        </div>
+      </Secao>
 
-      <div style={{marginBottom:8, fontSize:12, color:'var(--texto-ter)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:500}}>Benfeitorias</div>
-      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10, marginBottom:14}}>
-        <CardStat titulo="Pendentes / Realizadas" valor={`${cardsBen.pendentes} / ${cardsBen.realizados}`} sub={`${cardsBen.total} no período`}/>
-        <CardStat titulo="Valor" valor={fmtMoeda(cardsBen.valor)} cor="var(--lilas)"/>
-        <CardStat titulo="No prazo" valor={cardsBen.noPrazo} cor="var(--verde)"/>
-        <CardStat titulo="Atrasadas" valor={cardsBen.atrasados} cor="var(--vermelho)"/>
-      </div>
+      <Secao titulo="Benfeitorias" cor="var(--lilas)" bg="var(--lilas-bg)">
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10}}>
+          <CardSplit titulo="Benfeitorias cadastradas" total={respBen.total} zelador={respBen.zelador} sindico={respBen.sindico} cor="var(--lilas)"/>
+          <CardStat titulo="Pendentes / Realizadas (período)" valor={`${cardsBen.pendentes} / ${cardsBen.realizados}`}/>
+          <CardStat titulo="Valor" valor={fmtMoeda(cardsBen.valor)} cor="var(--lilas)"/>
+          <CardStat titulo="No prazo" valor={cardsBen.noPrazo} cor="var(--verde)"/>
+          <CardStat titulo="Atrasadas" valor={cardsBen.atrasados} cor="var(--vermelho)"/>
+        </div>
+      </Secao>
 
-      <div style={{marginBottom:8, fontSize:12, color:'var(--texto-ter)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:500}}>Solicitações de Morador</div>
-      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10, marginBottom:20}}>
-        <CardStat titulo="Recebidas"   valor={solRecebidas}/>
-        <CardStat titulo="Respondidas" valor={solRespondidas} cor="var(--azul)"/>
-        <CardStat titulo="Pendentes"   valor={solPendentes} cor="var(--vermelho)"/>
-      </div>
+      <Secao titulo="Solicitações de Morador" cor="var(--verde)" bg="var(--verde-bg)">
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10}}>
+          <CardStat titulo="Recebidas"   valor={solRecebidas}/>
+          <CardStat titulo="Respondidas" valor={solRespondidas} cor="var(--azul)"/>
+          <CardStat titulo="Pendentes"   valor={solPendentes} cor="var(--vermelho)"/>
+        </div>
+      </Secao>
+
+      <Secao titulo="Orçamentos" cor="var(--amarelo)" bg="var(--amarelo-bg)">
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10}}>
+          <CardStat titulo="Total cadastrados"   valor={orcamentos.length}/>
+          <CardStat titulo="Em cotação"          valor={orcsEmCotacao.length}    cor="var(--amarelo)"/>
+          <CardStat titulo="Negócios fechados"   valor={orcsFechados.length}     cor="var(--verde)"/>
+          <CardStat titulo="Sem orçamento (emerg.)" valor={orcsSemOrcamento.length} cor="var(--vermelho)"/>
+          <CardStat titulo="Valor total fechado" valor={fmtMoeda(valorOrcsFechados)} cor="var(--azul)"/>
+        </div>
+      </Secao>
 
       {/* Gráficos */}
       <div className="card card-azul" style={{marginBottom:14, padding:16}}>
