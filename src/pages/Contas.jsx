@@ -5,6 +5,11 @@ import ViewModal from './ViewModal'
 import { useSort, SortableTh } from '../utils/useSort'
 
 const GRUPOS = ['Atividades do Dia a Dia','Intervenções Corretivas','Benfeitorias']
+const TIPOS_CONTA = ['Receita','Gasto']
+const CORES_TIPO = {
+  'Receita': { bg:'var(--verde-bg)', cor:'var(--verde)' },
+  'Gasto':   { bg:'var(--vermelho-bg)', cor:'var(--vermelho)' },
+}
 const CORES_GRUPO = {
   'Atividades do Dia a Dia': { bg:'var(--azul-bg)', cor:'var(--azul)' },
   'Intervenções Corretivas': { bg:'var(--vermelho-bg)', cor:'var(--vermelho)' },
@@ -22,6 +27,7 @@ export default function Contas({ perfil }) {
   const [form, setForm] = useState({})
   const [verItem, setVerItem] = useState(null)
   const [filtroGrupo, setFiltroGrupo] = useState('Todos')
+  const [filtroTipoConta, setFiltroTipoConta] = useState('Todos')
   const [busca, setBusca] = useState('')
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
   const { sortBy, sortDir, onSort, ordenar } = useSort('descricao', 'asc')
@@ -34,7 +40,7 @@ export default function Contas({ perfil }) {
   }
 
   function abrirNovo() {
-    setForm({ descricao:'', grupo_orcamentario:GRUPOS[0], codigo_contabil:'' })
+    setForm({ descricao:'', grupo_orcamentario:GRUPOS[0], tipo_conta:'Gasto', codigo_contabil:'' })
     setModal('novo')
   }
   function abrirEditar(item) {
@@ -48,6 +54,7 @@ export default function Contas({ perfil }) {
       const payload = {
         descricao: form.descricao.trim(),
         grupo_orcamentario: form.grupo_orcamentario,
+        tipo_conta: form.tipo_conta || 'Gasto',
         codigo_contabil: form.codigo_contabil?.trim() || null
       }
       let result
@@ -76,6 +83,7 @@ export default function Contas({ perfil }) {
 
   const itensFiltrados = itens.filter(c => {
     if (filtroGrupo !== 'Todos' && c.grupo_orcamentario !== filtroGrupo) return false
+    if (filtroTipoConta !== 'Todos' && c.tipo_conta !== filtroTipoConta) return false
     if (busca) {
       const k = busca.toLowerCase()
       const txt = (c.descricao||'') + ' ' + (c.codigo_contabil||'')
@@ -91,6 +99,7 @@ export default function Contas({ perfil }) {
     const dados = itensFiltrados.map(c => ({
       ID: c.id,
       Descrição: c.descricao,
+      Tipo: c.tipo_conta,
       'Grupo Orçamentário': c.grupo_orcamentario,
       'Código Contábil': c.codigo_contabil || '',
       'Cadastrada em': fmtDataHora(c.criado_em)
@@ -114,12 +123,20 @@ export default function Contas({ perfil }) {
 
       <div className="stat-grid">
         <div className="stat"><div className="stat-n">{total}</div><div className="stat-l">Total</div></div>
-        <div className="stat"><div className="stat-n" style={{color:'var(--azul)'}}>{porGrupo('Atividades do Dia a Dia')}</div><div className="stat-l">Atividades</div></div>
-        <div className="stat"><div className="stat-n" style={{color:'var(--vermelho)'}}>{porGrupo('Intervenções Corretivas')}</div><div className="stat-l">Corretivas</div></div>
-        <div className="stat"><div className="stat-n" style={{color:'var(--lilas)'}}>{porGrupo('Benfeitorias')}</div><div className="stat-l">Benfeitorias</div></div>
+        <div className="stat"><div className="stat-n" style={{color:'var(--verde)'}}>{itens.filter(c => c.tipo_conta==='Receita').length}</div><div className="stat-l">Receitas</div></div>
+        <div className="stat"><div className="stat-n" style={{color:'var(--vermelho)'}}>{itens.filter(c => c.tipo_conta==='Gasto').length}</div><div className="stat-l">Gastos</div></div>
+        <div className="stat"><div className="stat-n" style={{color:'var(--azul)'}}>{porGrupo('Atividades do Dia a Dia')+porGrupo('Intervenções Corretivas')+porGrupo('Benfeitorias')}</div><div className="stat-l">Vinculadas a grupos</div></div>
       </div>
 
       <div style={{display:'flex',gap:16,marginBottom:14,flexWrap:'wrap',alignItems:'flex-end'}}>
+        <div>
+          <div style={{fontSize:11, color:'var(--texto-ter)', marginBottom:5}}>TIPO</div>
+          <div style={{display:'flex', gap:4}}>
+            {['Todos',...TIPOS_CONTA].map(t => (
+              <span key={t}>{btnFiltro(filtroTipoConta===t, () => setFiltroTipoConta(t), t)}</span>
+            ))}
+          </div>
+        </div>
         <div>
           <div style={{fontSize:11, color:'var(--texto-ter)', marginBottom:5}}>GRUPO ORÇAMENTÁRIO</div>
           <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
@@ -149,6 +166,7 @@ export default function Contas({ perfil }) {
             <tr>
               <SortableTh col="id"                  label="ID"                 sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               <SortableTh col="descricao"           label="Descrição"          sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="tipo_conta"          label="Tipo"               sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               <SortableTh col="grupo_orcamentario"  label="Grupo Orçamentário" sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               <SortableTh col="codigo_contabil"     label="Código Contábil"    sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               <SortableTh col="criado_em"           label="Cadastrada em"      sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
@@ -162,6 +180,15 @@ export default function Contas({ perfil }) {
                 <tr key={c.id} onDoubleClick={() => setVerItem(c)} style={{cursor:'pointer'}}>
                   <td style={{color:'var(--texto-sec)',fontSize:12}}>{c.id}</td>
                   <td style={{fontWeight:500}}>{c.descricao}</td>
+                  <td>
+                    {(() => {
+                      const t = c.tipo_conta || 'Gasto'
+                      const ct = CORES_TIPO[t]
+                      return <span style={{fontSize:11, padding:'2px 7px', borderRadius:6, fontWeight:500, background:ct.bg, color:ct.cor}}>
+                        <i className={`fa-solid fa-${t==='Receita'?'arrow-up':'arrow-down'}`} style={{marginRight:4,fontSize:9}}></i>{t}
+                      </span>
+                    })()}
+                  </td>
                   <td>
                     <span style={{fontSize:11, padding:'2px 7px', borderRadius:6, fontWeight:500,
                       background: cores.bg, color: cores.cor}}>{c.grupo_orcamentario}</span>
@@ -198,6 +225,12 @@ export default function Contas({ perfil }) {
               <input autoFocus value={form.descricao||''} onChange={e => setForm({...form,descricao:e.target.value})}/>
             </div>
             <div className="form-group">
+              <label>Tipo</label>
+              <select value={form.tipo_conta||'Gasto'} onChange={e => setForm({...form,tipo_conta:e.target.value})}>
+                {TIPOS_CONTA.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
               <label>Grupo orçamentário</label>
               <select value={form.grupo_orcamentario||GRUPOS[0]} onChange={e => setForm({...form,grupo_orcamentario:e.target.value})}>
                 {GRUPOS.map(g => <option key={g}>{g}</option>)}
@@ -225,6 +258,7 @@ export default function Contas({ perfil }) {
           campos={[
             { label:'ID',                  valor:verItem.id },
             { label:'Descrição',           valor:verItem.descricao },
+            { label:'Tipo',                valor:verItem.tipo_conta },
             { label:'Grupo Orçamentário',  valor:verItem.grupo_orcamentario },
             { label:'Código Contábil',     valor:verItem.codigo_contabil },
             { label:'Cadastrada em',       valor:verItem.criado_em, tipo:'datahora' },

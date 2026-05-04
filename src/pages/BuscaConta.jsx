@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 
 const GRUPOS = ['Atividades do Dia a Dia','Intervenções Corretivas','Benfeitorias']
+const TIPOS_CONTA = ['Receita','Gasto']
 
 /**
  * Modal de busca/criação de Contas.
@@ -14,7 +15,7 @@ export default function BuscaConta({ grupoFixo, onSelect, onCancelar }) {
   const [contas, setContas] = useState([])
   const [busca, setBusca] = useState('')
   const [criando, setCriando] = useState(false)
-  const [novaConta, setNovaConta] = useState({ descricao:'', grupo_orcamentario: grupoFixo || GRUPOS[0], codigo_contabil:'' })
+  const [novaConta, setNovaConta] = useState({ descricao:'', grupo_orcamentario: grupoFixo || GRUPOS[0], tipo_conta:'Gasto', codigo_contabil:'' })
   const [salvando, setSalvando] = useState(false)
 
   useEffect(() => { carregar() }, [])
@@ -73,6 +74,11 @@ export default function BuscaConta({ grupoFixo, onSelect, onCancelar }) {
                     <div style={{flex:1}}>
                       <div style={{fontWeight:500}}>{c.descricao}</div>
                       <div style={{fontSize:10, color:'var(--texto-ter)', marginTop:2}}>
+                        <span style={{
+                          background: c.tipo_conta==='Receita'?'var(--verde-bg)':'var(--vermelho-bg)',
+                          color: c.tipo_conta==='Receita'?'var(--verde)':'var(--vermelho)',
+                          padding:'1px 5px', borderRadius:3, marginRight:6, fontSize:9, fontWeight:500
+                        }}>{c.tipo_conta || 'Gasto'}</span>
                         {c.grupo_orcamentario}{c.codigo_contabil ? ` · ${c.codigo_contabil}` : ''}
                       </div>
                     </div>
@@ -92,6 +98,13 @@ export default function BuscaConta({ grupoFixo, onSelect, onCancelar }) {
               <label>Descrição</label>
               <input autoFocus value={novaConta.descricao}
                 onChange={e => setNovaConta({...novaConta, descricao:e.target.value})}/>
+            </div>
+            <div className="form-group">
+              <label>Tipo</label>
+              <select value={novaConta.tipo_conta||'Gasto'}
+                onChange={e => setNovaConta({...novaConta, tipo_conta:e.target.value})}>
+                {TIPOS_CONTA.map(t => <option key={t}>{t}</option>)}
+              </select>
             </div>
             <div className="form-group">
               <label>Grupo orçamentário</label>
