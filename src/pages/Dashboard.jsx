@@ -211,14 +211,14 @@ function SecaoCards({ titulo, cor, bg, stats, totalLabel }) {
       <div style={{fontSize:13, fontWeight:600, color:cor, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10}}>
         {titulo}
       </div>
-      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 280px', gap:10, alignItems:'stretch'}}>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1.3fr', gap:10, alignItems:'stretch'}}>
         <CardCadastradas titulo={totalLabel} total={stats.total} zelador={stats.zelador} sindico={stats.sindico} statusLabels={['Pendentes','Realizadas']}/>
         <CardCronograma titulo="Cronograma" stats={stats}/>
         <div className="card" style={{padding:14}}>
           <div style={{fontSize:11, fontWeight:600, color:cor, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6, textAlign:'center'}}>{titulo}</div>
-          <div style={{height:140}}>
+          <div style={{height:170}}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dadosBar}>
+              <BarChart data={dadosBar} margin={{ top:10, right:10, bottom:5, left:0 }}>
                 <XAxis dataKey="name" fontSize={11}/>
                 <YAxis fontSize={10} allowDecimals={false}/>
                 <Tooltip/>
@@ -492,7 +492,7 @@ export default function Dashboard({ perfil }) {
           </div>
         )}
         {orcamentoCab && (
-          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr)) 280px', gap:10}}>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1.6fr', gap:10}}>
             <CardNecessidadeCaixa
               saldoIni={saldoIni}
               receitasPrev={totReceitasPrev}
@@ -506,10 +506,10 @@ export default function Dashboard({ perfil }) {
               <div style={{fontSize:11, fontWeight:600, color:'var(--azul)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6, textAlign:'center'}}>
                 Gastos Previstos (R$)
               </div>
-              <div style={{flex:1, minHeight:200}}>
+              <div style={{flex:1, minHeight:240}}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={dadosPizzaGastos} dataKey="value" nameKey="name" outerRadius={60}
+                  <PieChart margin={{ top:10, right:10, bottom:10, left:10 }}>
+                    <Pie data={dadosPizzaGastos} dataKey="value" nameKey="name" outerRadius={85}
                       label={({value}) => fmtMoeda(value)}>
                       {dadosPizzaGastos.map((e,i) => <Cell key={i} fill={e.cor}/>)}
                     </Pie>
