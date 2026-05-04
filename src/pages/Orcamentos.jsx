@@ -83,6 +83,65 @@ function ModalBuscaItem({ tipo, onSelect, onCancelar }) {
   )
 }
 
+
+function ModalBuscaCondicao({ onSelect, onCancelar }) {
+  const [busca, setBusca] = useState('')
+  const [condicoes, setCondicoes] = useState([])
+
+  useEffect(() => {
+    supabase.from('condicao_pagamento').select('*').is('excluido_em', null).order('descricao')
+      .then(({ data }) => setCondicoes(data || []))
+  }, [])
+
+  function fmtPct(v) {
+    const n = parseFloat(v)
+    return isNaN(n) ? '' : n.toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 }) + '%'
+  }
+
+  function resumo(c) {
+    if (c.tipo === 'Desproporcional' && c.percentuais?.length) {
+      const pcts = [
+        c.tem_entrada && c.percentual_entrada != null ? `P0:${fmtPct(c.percentual_entrada)}` : null,
+        ...c.percentuais.map((p, i) => `P${i+1}:${fmtPct(p)}`),
+      ].filter(Boolean)
+      return pcts.join(' | ')
+    }
+    return `${c.num_parcelas}x ${(100/c.num_parcelas).toFixed(0)}%`
+  }
+
+  const filtradas = condicoes.filter(c =>
+    !busca || (c.descricao||'').toLowerCase().includes(busca.toLowerCase())
+  )
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onCancelar()}>
+      <div className="modal" style={{width:540, maxWidth:'95vw'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <h3 style={{margin:0}}>Selecionar condição de pagamento</h3>
+          <button onClick={onCancelar} style={{background:'var(--cinza-bg)',border:'none',borderRadius:'50%',width:30,height:30,fontSize:18,cursor:'pointer'}}>×</button>
+        </div>
+        <input autoFocus placeholder="Pesquisar por descrição..." value={busca} onChange={e => setBusca(e.target.value)}
+          style={{width:'100%', padding:'10px', borderRadius:8, border:'0.5px solid var(--borda)', marginBottom:8, boxSizing:'border-box'}}/>
+        <div style={{maxHeight:360, overflowY:'auto', border:'0.5px solid var(--borda)', borderRadius:8}}>
+          {filtradas.length === 0 && <div style={{padding:16,fontSize:12,color:'var(--texto-ter)',textAlign:'center'}}>Nenhuma condição cadastrada</div>}
+          {filtradas.map(c => (
+            <div key={c.id} onClick={() => onSelect(c)}
+              style={{padding:'11px 14px', cursor:'pointer', borderBottom:'0.5px solid var(--borda)'}}
+              onMouseEnter={e => e.currentTarget.style.background='var(--amarelo-bg)'}
+              onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+              <div style={{fontWeight:500, fontSize:13}}>{c.descricao}</div>
+              <div style={{fontSize:11, color:'var(--texto-ter)', marginTop:2}}>
+                {c.tipo}{c.tem_entrada ? ' · com entrada' : ''} · {c.num_parcelas}x a cada {c.intervalo} dias
+                {c.tipo === 'Desproporcional' ? ` · ${resumo(c)}` : ''}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Orcamentos({ perfil }) {
   const [orcamentos, setOrcamentos] = useState([])
   const [itensTodos, setItensTodos] = useState({ calendario:[], corretivas:[], benfeitorias:[] })
@@ -91,6 +150,7 @@ export default function Orcamentos({ perfil }) {
   const [arquivo, setArquivo] = useState(null)
   const [salvando, setSalvando] = useState(false)
   const [buscandoItem, setBuscandoItem] = useState(false)
+  const [buscandoCondicao, setBuscandoCondicao] = useState(false)
   const [showFiltros, setShowFiltros] = useState(false)
   const [filtros, setFiltros] = useState({ periodoIni:'', periodoFim:'', empresa:'', itemId:'', tipo:'' })
   const [verItem, setVerItem] = useState(null)
@@ -121,12 +181,12 @@ export default function Orcamentos({ perfil }) {
   function tipoLabel(t) { return TIPOS.find(x => x.value === t)?.label || t }
 
   function abrirNovo() {
-    setForm({ item_tipo:'corretiva', item_id:null, item_nome:'', empresa:'', valor:null, data:null, prazo_entrega:'', condicao_pagamento:'', obs:'', sem_orcamento:false, dispensa:false })
+    setForm({ item_tipo:'corretiva', item_id:null, item_nome:'', empresa:'', valor:null, data:null, prazo_entrega:'', condicao_pagamento_id:null, condicao_pagamento_nome:'', obs:'', sem_orcamento:false, dispensa:false })
     setArquivo(null)
     setModal('novo')
   }
   function abrirEditar(o) {
-    setForm({ ...o, item_nome: nomeItem(o) })
+    setForm({ ...o, item_nome: nomeItem(o), condicao_pagamento_nome: o.condicao_pagamento_nome || '' })
     setArquivo(null); setModal('editar')
   }
 
@@ -335,7 +395,21 @@ export default function Orcamentos({ perfil }) {
               <input type="date" value={form.data || ''} onChange={e => setForm({...form, data:e.target.value || null})}/>
             </div>
             <div className="form-group"><label>Prazo de entrega</label><input value={form.prazo_entrega||''} onChange={e => setForm({...form, prazo_entrega:e.target.value})} placeholder="Ex: 15 dias úteis"/></div>
-            <div className="form-group"><label>Condição de pagamento</label><input value={form.condicao_pagamento||''} onChange={e => setForm({...form, condicao_pagamento:e.target.value})} placeholder="Ex: 50%+50%"/></div>
+            <div className="form-group">
+              <label>Condição de pagamento</label>
+              {form.condicao_pagamento_id ? (
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <div style={{flex:1, padding:'8px 10px', border:'0.5px solid var(--borda)', borderRadius:8, fontSize:13, background:'var(--cinza-bg)'}}>
+                    {form.condicao_pagamento_nome || `Condição #${form.condicao_pagamento_id}`}
+                  </div>
+                  <button type="button" className="btn btn-sm" onClick={() => setForm({...form, condicao_pagamento_id:null, condicao_pagamento_nome:''})}>Trocar</button>
+                </div>
+              ) : (
+                <button type="button" className="btn" style={{width:'100%'}} onClick={() => setBuscandoCondicao(true)}>
+                  <i className="fa-solid fa-magnifying-glass" style={{marginRight:6}}></i>Selecionar condição de pagamento...
+                </button>
+              )}
+            </div>
             <div className="form-group"><label>Observações</label><textarea value={form.obs||''} onChange={e => setForm({...form, obs:e.target.value})}/></div>
             <div className="form-group"><label>Arquivo da proposta</label><input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => setArquivo(e.target.files[0])}/></div>
             {modal==='editar' && form.data_criacao && (
@@ -363,6 +437,16 @@ export default function Orcamentos({ perfil }) {
         />
       )}
 
+      {buscandoCondicao && (
+        <ModalBuscaCondicao
+          onSelect={c => {
+            setForm(f => ({ ...f, condicao_pagamento_id: c.id, condicao_pagamento_nome: c.descricao }))
+            setBuscandoCondicao(false)
+          }}
+          onCancelar={() => setBuscandoCondicao(false)}
+        />
+      )}
+
       {verItem && (
         <ViewModal
           titulo={verItem.empresa || '(orçamento)'}
@@ -377,7 +461,7 @@ export default function Orcamentos({ perfil }) {
             { label:'Valor',                valor:verItem.valor, tipo:'moeda' },
             { label:'Data orçamento',       valor:verItem.data, tipo:'data' },
             { label:'Prazo de entrega',     valor:verItem.prazo_entrega },
-            { label:'Condição pagamento',   valor:verItem.condicao_pagamento },
+            { label:'Condição pagamento',   valor:verItem.condicao_pagamento_nome || (verItem.condicao_pagamento_id ? `Condição #${verItem.condicao_pagamento_id}` : '—') },
             { label:'Sem orçamento (emerg.)', valor:verItem.sem_orcamento, tipo:'bool' },
             { label:'Selecionado',          valor:verItem.selecionado, tipo:'bool' },
             { label:'Motivo da escolha',    valor:verItem.motivo_escolha, tipo:'longtext' },

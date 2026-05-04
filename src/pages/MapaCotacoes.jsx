@@ -29,15 +29,59 @@ function moedaInputValue(v) {
 const TIPO_TABELA = { atividade:'calendario', corretiva:'corretivas', benfeitoria:'benfeitorias' }
 const TIPO_CAMPO_VALOR = { atividade:'valor', corretiva:'valor', benfeitoria:'valor' }
 
+
+function ModalCondicaoBusca({ condicoes, onSelect }) {
+  const [busca, setBusca] = useState('')
+  const filtradas = condicoes.filter(c => !busca || (c.descricao||'').toLowerCase().includes(busca.toLowerCase()))
+  function resumo(c) {
+    if (c.tipo === 'Desproporcional' && c.percentuais?.length) {
+      const n = v => isNaN(parseFloat(v)) ? '' : parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%'
+      const pcts = [
+        c.tem_entrada && c.percentual_entrada != null ? `P0:${n(c.percentual_entrada)}` : null,
+        ...c.percentuais.map((p,i) => `P${i+1}:${n(p)}`),
+      ].filter(Boolean)
+      return pcts.join(' | ')
+    }
+    return `${c.num_parcelas}x ${(100/(c.num_parcelas||1)).toFixed(0)}%`
+  }
+  return (
+    <>
+      <input autoFocus placeholder="Pesquisar por descrição..." value={busca} onChange={e => setBusca(e.target.value)}
+        style={{width:'100%',padding:'10px',borderRadius:8,border:'0.5px solid var(--borda)',marginBottom:8,boxSizing:'border-box'}}/>
+      <div style={{maxHeight:340,overflowY:'auto',border:'0.5px solid var(--borda)',borderRadius:8}}>
+        {filtradas.length === 0 && <div style={{padding:16,fontSize:12,color:'var(--texto-ter)',textAlign:'center'}}>Nenhuma condição cadastrada</div>}
+        {filtradas.map(c => (
+          <div key={c.id} onClick={() => onSelect(c)}
+            style={{padding:'11px 14px',cursor:'pointer',borderBottom:'0.5px solid var(--borda)'}}
+            onMouseEnter={e => e.currentTarget.style.background='var(--amarelo-bg)'}
+            onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+            <div style={{fontWeight:500,fontSize:13}}>{c.descricao}</div>
+            <div style={{fontSize:11,color:'var(--texto-ter)',marginTop:2}}>
+              {c.tipo}{c.tem_entrada?' · com entrada':''} · {c.num_parcelas}x a cada {c.intervalo} dias
+              {c.tipo==='Desproporcional'?` · ${resumo(c)}`:''}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
 export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil, onFechar }) {
   const [orcs, setOrcs] = useState([])
   const [docs, setDocs] = useState([])
   const [novoOrc, setNovoOrc] = useState(null)
   const [salvando, setSalvando] = useState(false)
   const [fecharForm, setFecharForm] = useState(null)  // {orc, motivo}
+  const [buscandoCondicao, setBuscandoCondicao] = useState(false)
+  const [condicoes, setCondicoes] = useState([])
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
 
-  useEffect(() => { carregar() }, [itemId, tipo])
+  useEffect(() => {
+    carregar()
+    supabase.from('condicao_pagamento').select('*').is('excluido_em', null).order('descricao')
+      .then(({ data }) => setCondicoes(data || []))
+  }, [itemId, tipo])
 
   async function carregar() {
     const { data } = await supabase.from('orcamentos').select('*')
@@ -56,7 +100,7 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
   const baratoId = orcsAtivos.length ? orcsAtivos.reduce((a,b) => (parseFloat(a.valor)||Infinity) < (parseFloat(b.valor)||Infinity) ? a : b).id : null
 
   function abrirNovoOrc() {
-    setNovoOrc({ empresa:'', valor:null, data:null, prazo_entrega:'', condicao_pagamento:'', obs:'', arquivo:null })
+    setNovoOrc({ empresa:'', valor:null, data:null, prazo_entrega:'', condicao_pagamento_id:null, condicao_pagamento_nome:'', obs:'', arquivo:null })
   }
   async function salvarNovoOrc() {
     if (!novoOrc.empresa) { alert('Informe a empresa'); return }
@@ -73,7 +117,7 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
       item_tipo: tipo, item_id: itemId,
       empresa: novoOrc.empresa, valor: novoOrc.valor,
       data: novoOrc.data, prazo_entrega: novoOrc.prazo_entrega,
-      condicao_pagamento: novoOrc.condicao_pagamento, obs: novoOrc.obs,
+      condicao_pagamento_id: novoOrc.condicao_pagamento_id || null, obs: novoOrc.obs,
       arquivo_url, data_criacao: new Date().toISOString(),
       dispensa: false, sem_orcamento: false
     }
@@ -197,7 +241,7 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
                     </td>
                     <td style={{fontWeight:500, color: ehBarato?'var(--azul)':ehSel?'var(--verde)':'var(--texto)'}}>{fmtMoeda(o.valor)}</td>
                     <td>{o.prazo_entrega||'—'}</td>
-                    <td>{o.condicao_pagamento||'—'}</td>
+                    <td>{condicoes.find(c=>c.id===o.condicao_pagamento_id)?.descricao||'—'}</td>
                     <td style={{maxWidth:120, color:'var(--texto-sec)'}}>{o.obs||'—'}</td>
                     <td>{o.arquivo_url ? <a href={o.arquivo_url} target="_blank" rel="noreferrer" style={{color:'var(--azul)'}}><i className="fa-solid fa-paperclip"></i></a> : '—'}</td>
                     {isAdmin && !negocioFechado && (
@@ -272,7 +316,18 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
               </div>
               <div className="form-group" style={{marginBottom:0,gridColumn:'1 / -1'}}>
                 <label>Condição de pagamento</label>
-                <input value={novoOrc.condicao_pagamento} onChange={e => setNovoOrc({...novoOrc, condicao_pagamento:e.target.value})} placeholder="Ex: 50% entrada + 50% na entrega"/>
+                {novoOrc.condicao_pagamento_id ? (
+                  <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                    <div style={{flex:1,padding:'8px 10px',border:'0.5px solid var(--borda)',borderRadius:8,fontSize:13,background:'var(--cinza-bg)'}}>
+                      {novoOrc.condicao_pagamento_nome}
+                    </div>
+                    <button type="button" className="btn btn-sm" onClick={() => setNovoOrc({...novoOrc, condicao_pagamento_id:null, condicao_pagamento_nome:''})}>Trocar</button>
+                  </div>
+                ) : (
+                  <button type="button" className="btn" style={{width:'100%'}} onClick={() => setBuscandoCondicao(true)}>
+                    <i className="fa-solid fa-magnifying-glass" style={{marginRight:6}}></i>Selecionar condição de pagamento...
+                  </button>
+                )}
               </div>
               <div className="form-group" style={{marginBottom:0,gridColumn:'1 / -1'}}>
                 <label>Observações</label>
@@ -292,6 +347,24 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
           </div>
         )}
 
+
+      {buscandoCondicao && (
+        <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setBuscandoCondicao(false)}>
+          <div className="modal" style={{width:540,maxWidth:'95vw'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+              <h3 style={{margin:0}}>Selecionar condição de pagamento</h3>
+              <button onClick={() => setBuscandoCondicao(false)} style={{background:'var(--cinza-bg)',border:'none',borderRadius:'50%',width:30,height:30,fontSize:18,cursor:'pointer'}}>×</button>
+            </div>
+            <ModalCondicaoBusca
+              condicoes={condicoes}
+              onSelect={c => {
+                setNovoOrc(n => ({...n, condicao_pagamento_id:c.id, condicao_pagamento_nome:c.descricao}))
+                setBuscandoCondicao(false)
+              }}
+            />
+          </div>
+        </div>
+      )}
         {docs.length > 0 && (
           <div style={{borderTop:'0.5px solid var(--borda)', paddingTop:14}}>
             <div style={{fontSize:11,color:'var(--texto-ter)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>Documentos vinculados</div>
