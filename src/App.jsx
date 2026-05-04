@@ -25,7 +25,11 @@ export default function App() {
   }, [])
 
   async function carregarPerfil(uid) {
-    setCarregando(true)
+    // Só exibe "Carregando..." na primeira carga (perfil ainda null).
+    // Renovações silenciosas de token (onAuthStateChange ao voltar de outra
+    // aba ou janela) não devem desmontar o Layout nem resetar estado interno.
+    setPerfil(prev => { if (!prev) setCarregando(true); return prev })
+
     const { data, error } = await supabase
       .from('usuarios')
       .select('*')
@@ -38,7 +42,9 @@ export default function App() {
       return
     }
 
-    setPerfil(data)
+    // Preserva a referência do objeto se for o mesmo usuário —
+    // evita que o useMemo do Layout recrie todos os componentes.
+    setPerfil(prev => (prev && prev.id === data.id ? prev : data))
     setCarregando(false)
   }
 
