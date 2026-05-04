@@ -6,6 +6,8 @@ import { useSort, SortableTh } from '../utils/useSort'
 
 const GRUPOS = ['Atividades do Dia a Dia','Intervenções Corretivas','Benfeitorias']
 const TIPOS_CONTA = ['Receita','Gasto']
+const ORIGENS = ['Orçamento do Condomínio','Orçamento de Fornecedores']
+
 const CORES_TIPO = {
   'Receita': { bg:'var(--verde-bg)', cor:'var(--verde)' },
   'Gasto':   { bg:'var(--vermelho-bg)', cor:'var(--vermelho)' },
@@ -14,6 +16,10 @@ const CORES_GRUPO = {
   'Atividades do Dia a Dia': { bg:'var(--azul-bg)', cor:'var(--azul)' },
   'Intervenções Corretivas': { bg:'var(--vermelho-bg)', cor:'var(--vermelho)' },
   'Benfeitorias':            { bg:'var(--lilas-bg)', cor:'var(--lilas)' },
+}
+const CORES_ORIGEM = {
+  'Orçamento do Condomínio':    { bg:'var(--azul-bg)', cor:'var(--azul)' },
+  'Orçamento de Fornecedores':  { bg:'var(--amarelo-bg)', cor:'#7a5c00' },
 }
 
 function fmtDataHora(d) {
@@ -28,6 +34,7 @@ export default function Contas({ perfil }) {
   const [verItem, setVerItem] = useState(null)
   const [filtroGrupo, setFiltroGrupo] = useState('Todos')
   const [filtroTipoConta, setFiltroTipoConta] = useState('Todos')
+  const [filtroOrigem, setFiltroOrigem] = useState('Todos')
   const [busca, setBusca] = useState('')
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
   const { sortBy, sortDir, onSort, ordenar } = useSort('descricao', 'asc')
@@ -40,7 +47,7 @@ export default function Contas({ perfil }) {
   }
 
   function abrirNovo() {
-    setForm({ descricao:'', grupo_orcamentario:GRUPOS[0], tipo_conta:'Gasto', codigo_contabil:'' })
+    setForm({ descricao:'', grupo_orcamentario:GRUPOS[0], tipo_conta:'Gasto', codigo_contabil:'', origem_orcamento:null })
     setModal('novo')
   }
   function abrirEditar(item) {
@@ -55,7 +62,8 @@ export default function Contas({ perfil }) {
         descricao: form.descricao.trim(),
         grupo_orcamentario: form.grupo_orcamentario,
         tipo_conta: form.tipo_conta || 'Gasto',
-        codigo_contabil: form.codigo_contabil?.trim() || null
+        codigo_contabil: form.codigo_contabil?.trim() || null,
+        origem_orcamento: form.origem_orcamento || null,
       }
       let result
       if (modal === 'novo') {
@@ -84,6 +92,7 @@ export default function Contas({ perfil }) {
   const itensFiltrados = itens.filter(c => {
     if (filtroGrupo !== 'Todos' && c.grupo_orcamentario !== filtroGrupo) return false
     if (filtroTipoConta !== 'Todos' && c.tipo_conta !== filtroTipoConta) return false
+    if (filtroOrigem !== 'Todos' && c.origem_orcamento !== filtroOrigem) return false
     if (busca) {
       const k = busca.toLowerCase()
       const txt = (c.descricao||'') + ' ' + (c.codigo_contabil||'')
@@ -93,7 +102,6 @@ export default function Contas({ perfil }) {
   })
 
   const total = itens.length
-  const porGrupo = (g) => itens.filter(c => c.grupo_orcamentario === g).length
 
   function exportar() {
     const dados = itensFiltrados.map(c => ({
@@ -101,6 +109,7 @@ export default function Contas({ perfil }) {
       Descrição: c.descricao,
       Tipo: c.tipo_conta,
       'Grupo Orçamentário': c.grupo_orcamentario,
+      'Origem do Orçamento': c.origem_orcamento || '',
       'Código Contábil': c.codigo_contabil || '',
       'Cadastrada em': fmtDataHora(c.criado_em)
     }))
@@ -116,6 +125,16 @@ export default function Contas({ perfil }) {
     }}>{label}</button>
   )
 
+  function BadgeOrigem({ origem }) {
+    if (!origem) return <span style={{color:'var(--texto-ter)',fontSize:11}}>—</span>
+    const c = CORES_ORIGEM[origem] || { bg:'var(--cinza-bg)', cor:'var(--texto-sec)' }
+    return (
+      <span style={{fontSize:11, padding:'2px 7px', borderRadius:6, fontWeight:500, background:c.bg, color:c.cor}}>
+        {origem}
+      </span>
+    )
+  }
+
   return (
     <div>
       <div className="page-title">Contas</div>
@@ -125,7 +144,8 @@ export default function Contas({ perfil }) {
         <div className="stat"><div className="stat-n">{total}</div><div className="stat-l">Total</div></div>
         <div className="stat"><div className="stat-n" style={{color:'var(--verde)'}}>{itens.filter(c => c.tipo_conta==='Receita').length}</div><div className="stat-l">Receitas</div></div>
         <div className="stat"><div className="stat-n" style={{color:'var(--vermelho)'}}>{itens.filter(c => c.tipo_conta==='Gasto').length}</div><div className="stat-l">Gastos</div></div>
-        <div className="stat"><div className="stat-n" style={{color:'var(--azul)'}}>{porGrupo('Atividades do Dia a Dia')+porGrupo('Intervenções Corretivas')+porGrupo('Benfeitorias')}</div><div className="stat-l">Vinculadas a grupos</div></div>
+        <div className="stat"><div className="stat-n" style={{color:'var(--azul)'}}>{itens.filter(c => c.origem_orcamento==='Orçamento do Condomínio').length}</div><div className="stat-l">Orç. Condomínio</div></div>
+        <div className="stat"><div className="stat-n" style={{color:'#7a5c00'}}>{itens.filter(c => c.origem_orcamento==='Orçamento de Fornecedores').length}</div><div className="stat-l">Orç. Fornecedores</div></div>
       </div>
 
       <div style={{display:'flex',gap:16,marginBottom:14,flexWrap:'wrap',alignItems:'flex-end'}}>
@@ -134,6 +154,14 @@ export default function Contas({ perfil }) {
           <div style={{display:'flex', gap:4}}>
             {['Todos',...TIPOS_CONTA].map(t => (
               <span key={t}>{btnFiltro(filtroTipoConta===t, () => setFiltroTipoConta(t), t)}</span>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:11, color:'var(--texto-ter)', marginBottom:5}}>ORIGEM DO ORÇAMENTO</div>
+          <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
+            {['Todos',...ORIGENS].map(o => (
+              <span key={o}>{btnFiltro(filtroOrigem===o, () => setFiltroOrigem(o), o)}</span>
             ))}
           </div>
         </div>
@@ -164,12 +192,13 @@ export default function Contas({ perfil }) {
         <table>
           <thead>
             <tr>
-              <SortableTh col="id"                  label="ID"                 sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
-              <SortableTh col="descricao"           label="Descrição"          sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
-              <SortableTh col="tipo_conta"          label="Tipo"               sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
-              <SortableTh col="grupo_orcamentario"  label="Grupo Orçamentário" sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
-              <SortableTh col="codigo_contabil"     label="Código Contábil"    sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
-              <SortableTh col="criado_em"           label="Cadastrada em"      sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="id"                  label="ID"                   sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="descricao"           label="Descrição"            sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="tipo_conta"          label="Tipo"                 sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="grupo_orcamentario"  label="Grupo Orçamentário"   sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="origem_orcamento"    label="Origem do Orçamento"  sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="codigo_contabil"     label="Código Contábil"      sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
+              <SortableTh col="criado_em"           label="Cadastrada em"        sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               {isAdmin && <th></th>}
             </tr>
           </thead>
@@ -193,6 +222,7 @@ export default function Contas({ perfil }) {
                     <span style={{fontSize:11, padding:'2px 7px', borderRadius:6, fontWeight:500,
                       background: cores.bg, color: cores.cor}}>{c.grupo_orcamentario}</span>
                   </td>
+                  <td><BadgeOrigem origem={c.origem_orcamento} /></td>
                   <td style={{fontFamily:'monospace',fontSize:12,color:'var(--texto-sec)'}}>{c.codigo_contabil || <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
                   <td style={{fontSize:11,color:'var(--texto-sec)'}}>{fmtDataHora(c.criado_em)}</td>
                   {isAdmin && (
@@ -237,6 +267,13 @@ export default function Contas({ perfil }) {
               </select>
             </div>
             <div className="form-group">
+              <label>Origem do orçamento <span style={{color:'var(--texto-ter)',fontSize:11}}>(opcional)</span></label>
+              <select value={form.origem_orcamento||''} onChange={e => setForm({...form,origem_orcamento:e.target.value||null})}>
+                <option value="">— Não definida —</option>
+                {ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
               <label>Código contábil <span style={{color:'var(--texto-ter)',fontSize:11}}>(opcional)</span></label>
               <input value={form.codigo_contabil||''} onChange={e => setForm({...form,codigo_contabil:e.target.value})} placeholder="Ex: 3.1.01.001"/>
             </div>
@@ -256,12 +293,13 @@ export default function Contas({ perfil }) {
           onFechar={() => setVerItem(null)}
           onEditar={isAdmin ? () => { abrirEditar(verItem); setVerItem(null) } : null}
           campos={[
-            { label:'ID',                  valor:verItem.id },
-            { label:'Descrição',           valor:verItem.descricao },
-            { label:'Tipo',                valor:verItem.tipo_conta },
-            { label:'Grupo Orçamentário',  valor:verItem.grupo_orcamentario },
-            { label:'Código Contábil',     valor:verItem.codigo_contabil },
-            { label:'Cadastrada em',       valor:verItem.criado_em, tipo:'datahora' },
+            { label:'ID',                   valor:verItem.id },
+            { label:'Descrição',            valor:verItem.descricao },
+            { label:'Tipo',                 valor:verItem.tipo_conta },
+            { label:'Grupo Orçamentário',   valor:verItem.grupo_orcamentario },
+            { label:'Origem do Orçamento',  valor:verItem.origem_orcamento },
+            { label:'Código Contábil',      valor:verItem.codigo_contabil },
+            { label:'Cadastrada em',        valor:verItem.criado_em, tipo:'datahora' },
           ]}
         />
       )}
