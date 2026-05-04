@@ -11,6 +11,7 @@ import Publicacoes from './Publicacoes'
 import Solicitacoes from './Solicitacoes'
 import Contas from './Contas'
 import OrcamentoCondominio from './OrcamentoCondominio'
+import CondicaoPagamento from './CondicaoPagamento'
 import AppZelador from './AppZelador'
 import AppVistorias from './AppVistorias'
 
@@ -26,6 +27,7 @@ const MENU = [
   { id:'diario',       label:'Diário de Manutenções' },
   { id:'solicitacoes', label:'Solicitações de Morador' },
   { id:'publicacoes',  label:'Publicações' },
+  { id:'cond_pgto',    label:'Condições de Pagamento' },
 ]
 
 export default function Layout({ perfil }) {
@@ -44,6 +46,7 @@ export default function Layout({ perfil }) {
     diario:       <Diario perfil={perfil} />,
     solicitacoes: <Solicitacoes perfil={perfil} />,
     publicacoes:  <Publicacoes perfil={perfil} />,
+    cond_pgto:    <CondicaoPagamento perfil={perfil} />,
   }
 
   const isAdmin    = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
@@ -87,7 +90,7 @@ export default function Layout({ perfil }) {
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:12, opacity:0.8 }}>
-            {perfil?.nome || 'Usuário'} {' '}
+            {perfil?.nome || 'Usuário'}{' '}
             <span style={{ background:'rgba(255,255,255,0.2)', padding:'2px 8px', borderRadius:6, fontSize:11 }}>
               {perfil?.perfil === 'admin' ? 'Administrador' : perfil?.perfil === 'sindico' ? 'Síndico' : perfil?.perfil === 'zelador' ? 'Zelador' : perfil?.perfil === 'vistorias' ? 'Vistorias' : 'Condômino'}
             </span>
