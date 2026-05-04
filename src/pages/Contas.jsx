@@ -22,6 +22,26 @@ const CORES_ORIGEM = {
   'Orçamento de Fornecedores':  { bg:'var(--amarelo-bg)', cor:'#7a5c00' },
 }
 
+
+
+function digitsToNum(str) {
+  const digits = String(str ?? '').replace(/\D/g, '')
+  if (!digits) return null
+  return parseInt(digits, 10) / 100
+}
+function moedaInputValue(v) {
+  if (v === null || v === undefined || v === '') return ''
+  const num = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'))
+  if (isNaN(num)) return ''
+  return num.toLocaleString('pt-BR', { style:'currency', currency:'BRL', minimumFractionDigits:2 })
+}
+function fmtMoeda(v) {
+  if (v === null || v === undefined || v === '') return null
+  const num = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'))
+  if (isNaN(num)) return null
+  return num.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
+}
+
 function fmtDataHora(d) {
   if (!d) return '—'
   try { return new Date(d).toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' }) } catch { return '—' }
@@ -224,6 +244,8 @@ export default function Contas({ perfil }) {
                   </td>
                   <td><BadgeOrigem origem={c.origem_orcamento} /></td>
                   <td style={{fontFamily:'monospace',fontSize:12,color:'var(--texto-sec)'}}>{c.codigo_contabil || <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
+                  <td style={{whiteSpace:'nowrap',fontSize:12}}>{c.valor_previsto && Number(c.valor_previsto)>0 ? fmtMoeda(c.valor_previsto) : <span style={{color:'var(--texto-ter)'}}>—</span>}</td>
+                  <td style={{whiteSpace:'nowrap',fontSize:12,fontWeight:500,color:'var(--verde)'}}>{c.valor_realizado && Number(c.valor_realizado)>0 ? fmtMoeda(c.valor_realizado) : <span style={{color:'var(--texto-ter)',fontWeight:400}}>—</span>}</td>
                   <td style={{fontSize:11,color:'var(--texto-sec)'}}>{fmtDataHora(c.criado_em)}</td>
                   {isAdmin && (
                     <td style={{display:'flex',gap:4}}>
@@ -276,6 +298,20 @@ export default function Contas({ perfil }) {
             <div className="form-group">
               <label>Código contábil <span style={{color:'var(--texto-ter)',fontSize:11}}>(opcional)</span></label>
               <input value={form.codigo_contabil||''} onChange={e => setForm({...form,codigo_contabil:e.target.value})} placeholder="Ex: 3.1.01.001"/>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <div className="form-group" style={{flex:1}}>
+                <label>Valor previsto (R$)</label>
+                <input type="text" inputMode="numeric" placeholder="R$ 0,00"
+                  value={moedaInputValue(form.valor_previsto)}
+                  onChange={e => setForm({...form, valor_previsto: digitsToNum(e.target.value)})}/>
+              </div>
+              <div className="form-group" style={{flex:1}}>
+                <label>Valor realizado (R$)</label>
+                <input type="text" inputMode="numeric" placeholder="R$ 0,00"
+                  value={moedaInputValue(form.valor_realizado)}
+                  onChange={e => setForm({...form, valor_realizado: digitsToNum(e.target.value)})}/>
+              </div>
             </div>
             <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:12}}>
               <button className="btn" onClick={() => setModal(null)}>Cancelar</button>
