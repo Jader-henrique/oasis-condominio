@@ -30,9 +30,24 @@ const MENU = [
   { id:'cond_pgto',    label:'Condições de Pagamento' },
 ]
 
+const MENU_IDS = new Set(MENU.map(m => m.id))
+const STORAGE_KEY = 'oasis_pagina'
+
+function lerPaginaSalva() {
+  try {
+    const salva = localStorage.getItem(STORAGE_KEY)
+    return salva && MENU_IDS.has(salva) ? salva : 'dashboard'
+  } catch { return 'dashboard' }
+}
+
 export default function Layout({ perfil }) {
-  const [pagina, setPagina] = useState('dashboard')
+  const [pagina, setPagina] = useState(lerPaginaSalva)
   const [modoVistorias, setModoVistorias] = useState(false)
+
+  function navegarPara(id) {
+    setPagina(id)
+    try { localStorage.setItem(STORAGE_KEY, id) } catch {}
+  }
 
   const PAGINAS = {
     dashboard:    <Dashboard perfil={perfil} />,
@@ -113,7 +128,7 @@ export default function Layout({ perfil }) {
           <div style={{ fontSize:10, color:'var(--texto-ter)', padding:'12px 16px 4px', textTransform:'uppercase', letterSpacing:'0.05em' }}>Menu</div>
           {MENU.map(m => (
             <button key={m.id}
-              onClick={() => setPagina(m.id)}
+              onClick={() => navegarPara(m.id)}
               style={{
                 display:'block', width:'100%', padding:'9px 16px',
                 fontSize:13, textAlign:'left', border:'none',
