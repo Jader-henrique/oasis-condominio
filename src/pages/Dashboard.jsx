@@ -55,9 +55,13 @@ function gerarOcorrencias(dataStr, frequencia, pontual, mesIni, mesFim) {
 // =============================================================
 // Cards reutilizáveis
 // =============================================================
-function CardNecessidadeCaixa({ saldoIni, receitasPrev, receitasReal, gastosPrev, gastosReal }) {
+function CardNecessidadeCaixa({ saldoIni, receitasPrev, receitasReal, gastosPrev, gastosReal,
+                                receitasCorrentesPrev=0, receitasCorrentesReal=0,
+                                atividadesPrev=0, atividadesReal=0 }) {
   const resultPrev = saldoIni + receitasPrev - gastosPrev
   const resultReal = saldoIni + receitasReal - gastosReal
+  const resultCorrentePrev = receitasCorrentesPrev - atividadesPrev
+  const resultCorrenteReal = receitasCorrentesReal - atividadesReal
   return (
     <div className="card" style={{padding:14}}>
       <div style={{borderTop:'3px solid var(--azul)', margin:'-14px -14px 10px', padding:'8px 14px', fontSize:11, fontWeight:600, color:'var(--azul)', textTransform:'uppercase', letterSpacing:'0.05em', background:'#fff'}}>
@@ -72,9 +76,17 @@ function CardNecessidadeCaixa({ saldoIni, receitasPrev, receitasReal, gastosPrev
           <tr><td>Receitas</td><td style={{textAlign:'right',color:'var(--verde)'}}>{fmtMoeda(receitasPrev)}</td><td style={{textAlign:'right',color:'var(--verde)'}}>{fmtMoeda(receitasReal)}</td></tr>
           <tr><td>Gastos</td><td style={{textAlign:'right',color:'var(--vermelho)'}}>−{fmtMoeda(gastosPrev)}</td><td style={{textAlign:'right',color:'var(--vermelho)'}}>−{fmtMoeda(gastosReal)}</td></tr>
           <tr style={{borderTop:'2px solid var(--amarelo)'}}>
-            <td style={{paddingTop:6,fontWeight:500}}>Resultado</td>
+            <td style={{paddingTop:6,fontWeight:500}}>Resultado Geral</td>
             <td style={{paddingTop:6,textAlign:'right',fontWeight:600,color: resultPrev>=0?'var(--verde)':'var(--vermelho)'}}>{fmtMoeda(resultPrev)}</td>
             <td style={{paddingTop:6,textAlign:'right',fontWeight:600,color: resultReal>=0?'var(--verde)':'var(--vermelho)'}}>{fmtMoeda(resultReal)}</td>
+          </tr>
+          <tr><td colSpan={3} style={{paddingTop:10,fontSize:10,color:'var(--texto-ter)',textTransform:'uppercase',letterSpacing:'0.05em',fontWeight:500}}>Demonstração corrente</td></tr>
+          <tr><td>Receitas Correntes</td><td style={{textAlign:'right',color:'var(--verde)'}}>{fmtMoeda(receitasCorrentesPrev)}</td><td style={{textAlign:'right',color:'var(--verde)'}}>{fmtMoeda(receitasCorrentesReal)}</td></tr>
+          <tr><td>Atividades do Dia a Dia</td><td style={{textAlign:'right',color:'var(--vermelho)'}}>−{fmtMoeda(atividadesPrev)}</td><td style={{textAlign:'right',color:'var(--vermelho)'}}>−{fmtMoeda(atividadesReal)}</td></tr>
+          <tr style={{borderTop:'2px solid var(--amarelo)'}}>
+            <td style={{paddingTop:6,fontWeight:500}}>Resultado Corrente</td>
+            <td style={{paddingTop:6,textAlign:'right',fontWeight:600,color: resultCorrentePrev>=0?'var(--verde)':'var(--vermelho)'}}>{fmtMoeda(resultCorrentePrev)}</td>
+            <td style={{paddingTop:6,textAlign:'right',fontWeight:600,color: resultCorrenteReal>=0?'var(--verde)':'var(--vermelho)'}}>{fmtMoeda(resultCorrenteReal)}</td>
           </tr>
         </tbody>
       </table>
@@ -499,6 +511,10 @@ export default function Dashboard({ perfil }) {
               receitasReal={totReceitasReal}
               gastosPrev={totGastosPrev}
               gastosReal={totGastosReal}
+              receitasCorrentesPrev={receitasPrev.find(r => /correntes/i.test(r.descricao))?.valor || 0}
+              receitasCorrentesReal={receitasReal.find(r => /correntes/i.test(r.descricao))?.valor || 0}
+              atividadesPrev={gastosPrevPorGrupo['Atividades do Dia a Dia']||0}
+              atividadesReal={gastosRealPorGrupo['Atividades do Dia a Dia']||0}
             />
             <CardOrcamento titulo="Previsto" receitas={receitasPrev} gastosPorGrupo={gastosPrevPorGrupo} corBorda="var(--azul)"/>
             <CardOrcamento titulo="Realizado" receitas={receitasReal} gastosPorGrupo={gastosRealPorGrupo} corBorda="var(--azul)"/>
