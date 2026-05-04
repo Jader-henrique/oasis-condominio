@@ -168,11 +168,6 @@ export default function Dashboard({ perfil }) {
     const s = String(d).slice(0,10)
     return s >= periodoIni && s <= periodoFim
   }
-  function periodoMes(d) {
-    if (!d) return false
-    const m = String(d).slice(0,7)
-    return m >= periodoIni.slice(0,7) && m <= periodoFim.slice(0,7)
-  }
 
   // ─── Orçamento ativo para o período ──────────────────────────────────────────
   const orcAtivo = orcCondList.find(o => {
@@ -183,43 +178,33 @@ export default function Dashboard({ perfil }) {
 
   const orcAtivItens = orcCondItens.filter(i => i.orcamento_id === orcAtivo?.id)
 
+  // Intersecção entre filtro selecionado e vigência do orçamento ativo
+  // garante que o Dashboard mostra exatamente os mesmos meses que o OrcamentoCondominio
+  const effDe = orcAtivo
+    ? (periodoIni.slice(0,7) > String(orcAtivo.vigencia_de).slice(0,7)
+        ? periodoIni.slice(0,7) : String(orcAtivo.vigencia_de).slice(0,7))
+    : periodoIni.slice(0,7)
+  const effAte = orcAtivo
+    ? (periodoFim.slice(0,7) < String(orcAtivo.vigencia_ate).slice(0,7)
+        ? periodoFim.slice(0,7) : String(orcAtivo.vigencia_ate).slice(0,7))
+    : periodoFim.slice(0,7)
+
+  // Lê sempre do orcCondValores (igual ao OrcamentoCondominio), filtrando pela
+  // intersecção filtro × vigência — elimina divergências de "cálculo ao vivo"
   function sumValorItem(itemId, campo) {
     return orcCondValores
-      .filter(v => v.item_id === itemId && periodoMes(v.competencia))
+      .filter(v => {
+        if (v.item_id !== itemId) return false
+        const m = String(v.competencia||'').slice(0,7)
+        return m >= effDe && m <= effAte
+      })
       .reduce((s,v) => s + (parseFloat(v[campo])||0), 0)
   }
 
-  // Ocorrências de um item no período (para contas Fornecedores)
-  function ocorrsNoPeriodo(dataStr, frequencia, pontual) {
-    if (!dataStr) return 0
-    const ini = new Date(periodoIni)
-    const fim = new Date(periodoFim + 'T23:59:59')
-    const df = String(dataStr).length === 7 ? dataStr+'-01' : dataStr
-    let cur = new Date(df)
-    if (pontual || !frequencia || !DIAS_FREQ[frequencia]) {
-      return (cur >= ini && cur <= fim) ? 1 : 0
-    }
-    const dias = DIAS_FREQ[frequencia]
-    while (cur < ini) cur = addDias(cur, dias)
-    let count = 0
-    while (cur <= fim) { count++; cur = addDias(cur, dias) }
-    return count
-  }
-
-  // Previsto total de uma conta (Fornecedores = calcula das fontes; Condomínio = do DB)
+  // Previsto de uma conta: sempre lê do banco (orcCondValores)
+  // Para contas Fornecedores, o valor foi gravado pelo botão "Sincronizar" do OrcamentoCondominio
   function previstoForConta(item) {
     if (!item.conta) return 0
-    if (item.conta.origem_orcamento === 'Orçamento de Fornecedores') {
-      const cId = item.conta.id
-      let v = 0
-      for (const a of atividades.filter(x => x.conta_id === cId))
-        v += (parseFloat(a.valor_previsto)||0) * ocorrsNoPeriodo(a.proxima_data, a.frequencia, a.pontual)
-      for (const c of corretivas.filter(x => x.conta_id === cId))
-        v += (parseFloat(c.valor_previsto)||0) * ocorrsNoPeriodo(c.data_inicio_prevista, c.recorrencia, null)
-      for (const b of benfeitorias.filter(x => x.conta_id === cId))
-        v += (parseFloat(b.valor_previsto)||0) * ocorrsNoPeriodo(b.previsto, b.recorrencia, null)
-      return v
-    }
     return sumValorItem(item.id, 'valor_previsto')
   }
 
