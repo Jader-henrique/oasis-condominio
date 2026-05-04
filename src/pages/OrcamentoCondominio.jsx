@@ -577,7 +577,7 @@ export default function OrcamentoCondominio({ perfil }) {
       </tr>
     )
   }
-  function renderSubtotalRow(label,saldoP,recItens,gasItens,editavel) {
+  function renderSubtotalRow(label,gasItems,editavel) {
     const bg='#dbeafe'
     return (
       <tr key={`sub_${label}`} style={{background:bg,fontWeight:700}}>
@@ -586,10 +586,30 @@ export default function OrcamentoCondominio({ perfil }) {
           {label}
         </td>
         {meses.map(mes=>{
-          const rP=recItens.reduce((s,i)=>s+(i.valores[mes]?.previsto||0),0)
-          const gP=gasItens.reduce((s,i)=>s+(i.valores[mes]?.previsto||0),0)
-          return <td key={mes} style={{...tdBase,background:bg,color:'#1e3a5f',fontWeight:700}}>
-            {fmtMoeda(saldoP[mes]+rP-gP)}
+          const gP=gasItems.reduce((s,i)=>s+(i.valores[mes]?.previsto||0),0)
+          return <td key={mes} style={{...tdBase,background:bg,color:'#7f1f1f',fontWeight:700}}>
+            {gP>0?fmtMoeda(gP):'—'}
+          </td>
+        })}
+        <td style={{...tdBase,background:bg}}></td>
+        {editavel&&<td style={{...tdBase,background:bg}}></td>}
+      </tr>
+    )
+  }
+  function renderSaldoFinalRow(saldoP,editavel) {
+    const bg='#1e3a5f'
+    return (
+      <tr key="saldo_final" style={{background:bg,fontWeight:700}}>
+        <td colSpan={5} style={{...tdBase,background:bg,position:'sticky',left:0,zIndex:2,
+          textAlign:'left',fontSize:12,fontWeight:700,color:'#fff'}}>
+          <i className="fa-solid fa-landmark" style={{marginRight:8}}></i>Saldo Final
+        </td>
+        {meses.map(mes=>{
+          const rP=formItens.filter(i=>i.conta.tipo_conta==='Receita').reduce((s,i)=>s+(i.valores[mes]?.previsto||0),0)
+          const gP=formItens.filter(i=>i.conta.tipo_conta==='Gasto').reduce((s,i)=>s+(i.valores[mes]?.previsto||0),0)
+          const sf=(saldoP[mes]||0)+rP-gP
+          return <td key={mes} style={{...tdBase,background:bg,color:sf>=0?'#86efac':'#fca5a5',fontWeight:700}}>
+            {fmtMoeda(sf)}
           </td>
         })}
         <td style={{...tdBase,background:bg}}></td>
@@ -749,19 +769,35 @@ export default function OrcamentoCondominio({ perfil }) {
                       Nenhuma conta adicionada. Clique em "Adicionar Conta" ou "Sincronizar".
                     </td></tr>
                   )}
+                  {formItens.length>0&&(
+                    <tr style={{background:'#e8f0fe',fontWeight:600}}>
+                      <td colSpan={5} style={{...tdBase,position:'sticky',left:0,zIndex:2,background:'#e8f0fe',
+                        textAlign:'left',fontWeight:700,color:'#1e3a5f',fontSize:12}}>
+                        <i className="fa-solid fa-wallet" style={{marginRight:8}}></i>Saldo Inicial
+                      </td>
+                      {meses.map(mes=>(
+                        <td key={mes} style={{...tdBase,background:'#e8f0fe',color:'#1e3a5f',fontWeight:700}}>
+                          {fmtMoeda(saldoP[mes])}
+                        </td>
+                      ))}
+                      <td style={{...tdBase,background:'#e8f0fe'}}></td>
+                      <td style={{...tdBase,background:'#e8f0fe'}}></td>
+                    </tr>
+                  )}
                   {(g1R.length>0||g1G.length>0)&&renderGrupoHeader('Atividades do Dia a Dia',6+meses.length+1)}
                   {g1R.length>0&&renderSubtituloTipo('Receitas',true,'g1r_hdr')}
                   {g1R.map((item,idx)=>renderItemRow(item,idx,true))}
                   {g1G.length>0&&renderSubtituloTipo('Gastos',false,'g1g_hdr')}
                   {g1G.map((item,idx)=>renderItemRow(item,idx,true))}
-                  {(g1R.length>0||g1G.length>0)&&renderSubtotalRow('Subtotal - Atividades do Dia a Dia',saldoP,g1R,g1G,true)}
+                  {(g1R.length>0||g1G.length>0)&&renderSubtotalRow('Subtotal - Atividades do Dia a Dia',g1G,true)}
                   {(g2R.length>0||g2G.length>0)&&renderGrupoHeader('Intervenções Corretivas e Benfeitorias',6+meses.length+1)}
                   {g2R.length>0&&renderSubtituloTipo('Receitas',true,'g2r_hdr')}
                   {g2R.map((item,idx)=>renderItemRow(item,idx,true))}
                   {g2G.length>0&&renderSubtituloTipo('Gastos',false,'g2g_hdr')}
                   {g2G.map((item,idx)=>renderItemRow(item,idx,true))}
-                  {(g2R.length>0||g2G.length>0)&&renderSubtotalRow('Subtotal - Intervenções Corretivas e Benfeitorias',saldoP,g2R,g2G,true)}
+                  {(g2R.length>0||g2G.length>0)&&renderSubtotalRow('Subtotal - Intervenções Corretivas e Benfeitorias',g2G,true)}
                   {formItens.filter(i=>!['Atividades do Dia a Dia','Intervenções Corretivas','Benfeitorias'].includes(i.conta.grupo_orcamentario)).map((item,idx)=>renderItemRow(item,idx,true))}
+                  {formItens.length>0&&renderSaldoFinalRow(saldoP,true)}
                 </tbody>
               </table>
             </div>
@@ -849,18 +885,19 @@ export default function OrcamentoCondominio({ perfil }) {
                 {g1R.map((item,idx)=>renderItemRow(item,idx,false))}
                 {g1G.length>0&&renderSubtituloTipo('Gastos',false,'v_g1g')}
                 {g1G.map((item,idx)=>renderItemRow(item,idx,false))}
-                {(g1R.length>0||g1G.length>0)&&renderSubtotalRow('Subtotal - Atividades do Dia a Dia',saldoP,g1R,g1G,false)}
+                {(g1R.length>0||g1G.length>0)&&renderSubtotalRow('Subtotal - Atividades do Dia a Dia',g1G,false)}
                 {(g2R.length>0||g2G.length>0)&&renderGrupoHeader('Intervenções Corretivas e Benfeitorias',colTotal)}
                 {g2R.length>0&&renderSubtituloTipo('Receitas',true,'v_g2r')}
                 {g2R.map((item,idx)=>renderItemRow(item,idx,false))}
                 {g2G.length>0&&renderSubtituloTipo('Gastos',false,'v_g2g')}
                 {g2G.map((item,idx)=>renderItemRow(item,idx,false))}
-                {(g2R.length>0||g2G.length>0)&&renderSubtotalRow('Subtotal - Intervenções Corretivas e Benfeitorias',saldoP,g2R,g2G,false)}
+                {(g2R.length>0||g2G.length>0)&&renderSubtotalRow('Subtotal - Intervenções Corretivas e Benfeitorias',g2G,false)}
                 {formItens.length===0&&(
                   <tr><td colSpan={colTotal} style={{textAlign:'center',padding:40,color:'var(--texto-ter)',fontSize:13}}>
                     Nenhuma conta cadastrada neste orçamento
                   </td></tr>
                 )}
+                {formItens.length>0&&renderSaldoFinalRow(saldoP,false)}
               </tbody>
             </table>
           </div>
