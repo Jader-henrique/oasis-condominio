@@ -10,6 +10,7 @@ import Diario from './Diario'
 import Publicacoes from './Publicacoes'
 import Solicitacoes from './Solicitacoes'
 import Contas from './Contas'
+import OrcamentoCondominio from './OrcamentoCondominio'
 import AppZelador from './AppZelador'
 import AppVistorias from './AppVistorias'
 
@@ -21,13 +22,13 @@ const MENU = [
   { id:'calendario',   label:'Calendário' },
   { id:'orcamentos',   label:'Orçamentos de Fornecedores' },
   { id:'contas',       label:'Contas' },
+  { id:'orc_cond',     label:'Orçamento do Condomínio' },
   { id:'diario',       label:'Diário de Manutenções' },
   { id:'solicitacoes', label:'Solicitações de Morador' },
   { id:'publicacoes',  label:'Publicações' },
 ]
 
 export default function Layout({ perfil }) {
-  // Sistema abre sempre pelo Dashboard
   const [pagina, setPagina] = useState('dashboard')
   const [modoVistorias, setModoVistorias] = useState(false)
 
@@ -39,6 +40,7 @@ export default function Layout({ perfil }) {
     calendario:   <Calendario perfil={perfil} />,
     orcamentos:   <Orcamentos perfil={perfil} />,
     contas:       <Contas perfil={perfil} />,
+    orc_cond:     <OrcamentoCondominio perfil={perfil} />,
     diario:       <Diario perfil={perfil} />,
     solicitacoes: <Solicitacoes perfil={perfil} />,
     publicacoes:  <Publicacoes perfil={perfil} />,
@@ -51,7 +53,6 @@ export default function Layout({ perfil }) {
   if (isZelador)   return <AppZelador perfil={perfil}/>
   if (isVistorias) return <AppVistorias perfil={perfil}/>
 
-  // Síndico/Admin pode entrar no modo Vistorias temporariamente
   if (modoVistorias && isAdmin) return (
     <div>
       <div style={{position:'sticky', top:0, zIndex:50, background:'var(--lilas)', color:'#fff', padding:'8px 16px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
@@ -81,12 +82,12 @@ export default function Layout({ perfil }) {
           </div>
           <div>
             <div style={{ fontSize:13, fontWeight:400, letterSpacing:3 }}>OÁSIS</div>
-            <div style={{ fontSize:8, opacity:0.6, letterSpacing:2 }}>EDIFÍCIO RESIDENCIAL</div>
+            <div style={{ fontSize:8, opacity:0.6, letterSpacing:2 }}>EDÍFICIO RESIDENCIAL</div>
           </div>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:12, opacity:0.8 }}>
-            {perfil?.nome || 'Usuário'} ·{' '}
+            {perfil?.nome || 'Usuário'} {' '}
             <span style={{ background:'rgba(255,255,255,0.2)', padding:'2px 8px', borderRadius:6, fontSize:11 }}>
               {perfil?.perfil === 'admin' ? 'Administrador' : perfil?.perfil === 'sindico' ? 'Síndico' : perfil?.perfil === 'zelador' ? 'Zelador' : perfil?.perfil === 'vistorias' ? 'Vistorias' : 'Condômino'}
             </span>
@@ -105,7 +106,7 @@ export default function Layout({ perfil }) {
       </div>
 
       <div style={{ display:'flex', flex:1 }}>
-        <div style={{ width:200, background:'var(--branco)', borderRight:'0.5px solid var(--borda)', padding:'12px 0', flexShrink:0 }}>
+        <div style={{ width:210, background:'var(--branco)', borderRight:'0.5px solid var(--borda)', padding:'12px 0', flexShrink:0 }}>
           <div style={{ fontSize:10, color:'var(--texto-ter)', padding:'12px 16px 4px', textTransform:'uppercase', letterSpacing:'0.05em' }}>Menu</div>
           {MENU.map(m => (
             <button key={m.id}
