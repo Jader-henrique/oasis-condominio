@@ -215,7 +215,7 @@ export default function Orcamentos({ perfil }) {
         const { data: u } = supabase.storage.from('documentos').getPublicUrl(path)
         arquivo_url = u.publicUrl
       }
-      const { item_nome, ...rest } = form
+      const { item_nome, condicao_pagamento_nome, ...rest } = form
       // Filtra strings vazias para evitar enviar campos invalidos
       const payload = { arquivo_url }
       Object.keys(rest).forEach(k => {
