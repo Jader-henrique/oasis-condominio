@@ -112,6 +112,11 @@ tr:last-child td { border-bottom: none; }
   display: flex; align-items: center; justify-content: center;
   z-index: 200;
 }
+/* Bloqueia o primeiro clique após janela/aba recuperar foco —
+   evita que o "clique de retorno" feche o modal acidentalmente */
+.janela-desfocada .modal-overlay {
+  pointer-events: none;
+}
 .modal {
   background: var(--branco);
   border-radius: 12px;
