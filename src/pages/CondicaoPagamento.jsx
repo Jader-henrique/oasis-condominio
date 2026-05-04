@@ -17,6 +17,24 @@ function Badge({ tipo }) {
   )
 }
 
+function Toggle({ ativo, onChange, label }) {
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => onChange(!ativo)}>
+      <div style={{
+        width:36, height:20, borderRadius:10, position:'relative', transition:'background 0.2s',
+        background: ativo ? 'var(--verde)' : '#ccc', flexShrink:0
+      }}>
+        <div style={{
+          position:'absolute', top:2, left: ativo ? 18 : 2,
+          width:16, height:16, borderRadius:'50%', background:'#fff',
+          transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.25)'
+        }}/>
+      </div>
+      <span style={{ fontSize:13, color:'var(--texto-sec)', userSelect:'none' }}>{label}</span>
+    </div>
+  )
+}
+
 function fmtPct(v) {
   const n = parseFloat(v)
   return isNaN(n) ? '0,00%' : n.toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 }) + '%'
@@ -26,14 +44,15 @@ function fmtDataHora(d) {
   try { return new Date(d).toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' }) } catch { return '—' }
 }
 
-function PctInputs({ n, valores, onChange }) {
+// Inputs de percentual para P1..Pn. somaEsperada = quanto os Pn devem somar.
+function PctInputs({ n, valores, onChange, somaEsperada = 100 }) {
   const soma = valores.reduce((s, v) => s + (parseFloat(v)||0), 0)
-  const ok = Math.abs(soma - 100) < 0.01
+  const ok = Math.abs(soma - somaEsperada) < 0.01
   return (
     <div>
       <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:4 }}>
         {Array.from({ length: n }, (_, i) => (
-          <div key={i} style={{ minWidth:70 }}>
+          <div key={i} style={{ minWidth:72 }}>
             <div style={{ fontSize:10, color:'var(--texto-ter)', marginBottom:2 }}>Parcela {i+1}</div>
             <input
               type="number" min="0" max="100" step="0.01"
@@ -44,17 +63,15 @@ function PctInputs({ n, valores, onChange }) {
                 next[i] = e.target.value === '' ? '' : parseFloat(e.target.value)
                 onChange(next)
               }}
-              style={{ width:70, padding:'5px 6px', fontSize:12 }}
+              style={{ width:72, padding:'5px 6px', fontSize:12 }}
             />
           </div>
         ))}
       </div>
-      <div style={{
-        fontSize:11, fontWeight:500,
-        color: ok ? 'var(--verde)' : 'var(--vermelho)',
-        marginTop:2
-      }}>
-        Soma: {fmtPct(soma)}{ok ? ' ✓ OK' : ' — deve ser 100%'}
+      <div style={{ fontSize:11, fontWeight:500, color: ok ? 'var(--verde)' : 'var(--vermelho)', marginTop:2 }}>
+        Soma P1–P{n}: {fmtPct(soma)}
+        {somaEsperada !== 100 && <span style={{ color:'var(--texto-ter)', fontWeight:400 }}> (esperado {fmtPct(somaEsperada)})</span>}
+        {ok ? ' ✓ OK' : ` — faltam ${fmtPct(somaEsperada - soma)}`}
       </div>
     </div>
   )
@@ -82,18 +99,17 @@ export default function CondicaoPagamento({ perfil }) {
     setItens(data || [])
   }
 
-  function novoForm() {
-    return { descricao:'', tipo:'Proporcional', num_parcelas:1, intervalo:30 }
-  }
-
   function abrirNovo() {
-    const f = novoForm()
-    setForm(f)
+    setForm({ descricao:'', tipo:'Proporcional', num_parcelas:1, intervalo:30, tem_entrada:false, percentual_entrada:'' })
     setPcts([])
     setModal('novo')
   }
   function abrirEditar(item) {
-    setForm({ ...item })
+    setForm({
+      ...item,
+      tem_entrada: item.tem_entrada || false,
+      percentual_entrada: item.percentual_entrada ?? '',
+    })
     setPcts(item.percentuais || [])
     setModal('editar')
   }
@@ -108,6 +124,18 @@ export default function CondicaoPagamento({ perfil }) {
     })
   }
 
+  function handleTipoChange(t) {
+    setForm(f => ({ ...f, tipo: t }))
+    if (t === 'Desproporcional') {
+      const n = parseInt(form.num_parcelas, 10) || 1
+      setPcts(prev => {
+        const next = [...prev]
+        while (next.length < n) next.push('')
+        return next.slice(0, n)
+      })
+    }
+  }
+
   async function salvar() {
     if (!form.descricao?.trim()) { alert('Informe a descrição'); return }
     const np = parseInt(form.num_parcelas, 10)
@@ -115,22 +143,38 @@ export default function CondicaoPagamento({ perfil }) {
     if (!np || np < 1) { alert('Nº de parcelas deve ser um inteiro positivo'); return }
     if (!iv || iv < 1) { alert('Intervalo deve ser um inteiro positivo'); return }
 
+    const temEntrada = !!form.tem_entrada
     let percentuais = null
+    let percentual_entrada = null
+
     if (form.tipo === 'Desproporcional') {
+      const pctEntrada = temEntrada ? (parseFloat(form.percentual_entrada) || 0) : 0
+      if (temEntrada) {
+        if (pctEntrada <= 0 || pctEntrada >= 100) {
+          alert('Percentual de entrada deve ser maior que 0% e menor que 100%'); return
+        }
+        percentual_entrada = pctEntrada
+      }
+      const somaEsperadaParcelas = 100 - pctEntrada
       const vals = pcts.slice(0, np).map(v => parseFloat(v)||0)
       const soma = vals.reduce((s, v) => s + v, 0)
-      if (Math.abs(soma - 100) > 0.01) {
-        alert(`A soma dos percentuais deve ser 100%. Soma atual: ${soma.toFixed(2)}%`); return
+      if (Math.abs(soma - somaEsperadaParcelas) > 0.01) {
+        const msg = temEntrada
+          ? `A soma das parcelas P1–P${np} deve ser ${somaEsperadaParcelas.toFixed(2)}% (100% − entrada ${pctEntrada.toFixed(2)}%). Soma atual: ${soma.toFixed(2)}%`
+          : `A soma dos percentuais deve ser 100%. Soma atual: ${soma.toFixed(2)}%`
+        alert(msg); return
       }
       percentuais = vals
     }
 
     try {
       const payload = {
-        descricao:    form.descricao.trim(),
-        tipo:         form.tipo,
-        num_parcelas: np,
-        intervalo:    iv,
+        descricao:          form.descricao.trim(),
+        tipo:               form.tipo,
+        num_parcelas:       np,
+        intervalo:          iv,
+        tem_entrada:        temEntrada,
+        percentual_entrada: percentual_entrada,
         percentuais,
       }
       let result
@@ -162,23 +206,30 @@ export default function CondicaoPagamento({ perfil }) {
 
   const itensFiltrados = itens.filter(i => {
     if (filtroTipo !== 'Todos' && i.tipo !== filtroTipo) return false
-    if (busca) {
-      const k = busca.toLowerCase()
-      if (!(i.descricao||'').toLowerCase().includes(k)) return false
-    }
+    if (busca && !(i.descricao||'').toLowerCase().includes(busca.toLowerCase())) return false
     return true
   })
 
   function exportar() {
-    const dados = itensFiltrados.map(i => ({
-      ID:           i.id,
-      Descrição:    i.descricao,
-      Tipo:         i.tipo,
-      'Nº Parcelas':i.num_parcelas,
-      Intervalo:    i.intervalo,
-      Percentuais:  i.percentuais ? i.percentuais.map((v,j)=>`P${j+1}:${v}%`).join(' | ') : '',
-      'Cadastrado em': fmtDataHora(i.criado_em),
-    }))
+    const dados = itensFiltrados.map(i => {
+      const pctStr = i.tipo === 'Desproporcional' && i.percentuais
+        ? [
+            i.tem_entrada && i.percentual_entrada != null ? `P0(entrada):${i.percentual_entrada}%` : null,
+            ...i.percentuais.map((v,j)=>`P${j+1}:${v}%`),
+          ].filter(Boolean).join(' | ')
+        : ''
+      return {
+        ID:             i.id,
+        Descrição:      i.descricao,
+        Tipo:           i.tipo,
+        'Tem Entrada':  i.tem_entrada ? 'Sim' : 'Não',
+        'Nº Parcelas':  i.num_parcelas,
+        Intervalo:      i.intervalo,
+        'Entrada (%)':  i.tem_entrada && i.percentual_entrada != null ? i.percentual_entrada : '',
+        Percentuais:    pctStr,
+        'Cadastrado em': fmtDataHora(i.criado_em),
+      }
+    })
     exportarParaExcel(dados, 'condicoes_pagamento.xlsx', 'Condições de Pagamento')
   }
 
@@ -191,8 +242,12 @@ export default function CondicaoPagamento({ perfil }) {
     }}>{label}</button>
   )
 
-  const isDesprop = form.tipo === 'Desproporcional'
-  const np = parseInt(form.num_parcelas, 10) || 1
+  // Helpers derivados do form
+  const isDesprop    = form.tipo === 'Desproporcional'
+  const temEntrada   = !!form.tem_entrada
+  const np           = parseInt(form.num_parcelas, 10) || 1
+  const pctEntrada   = parseFloat(form.percentual_entrada) || 0
+  const somaEsperada = isDesprop && temEntrada ? Math.max(0, 100 - pctEntrada) : 100
 
   return (
     <div>
@@ -208,6 +263,10 @@ export default function CondicaoPagamento({ perfil }) {
         <div className="stat">
           <div className="stat-n" style={{color:'var(--lilas)'}}>{itens.filter(i=>i.tipo==='Desproporcional').length}</div>
           <div className="stat-l">Desproporcionais</div>
+        </div>
+        <div className="stat">
+          <div className="stat-n" style={{color:'var(--verde)'}}>{itens.filter(i=>i.tem_entrada).length}</div>
+          <div className="stat-l">Com entrada</div>
         </div>
       </div>
 
@@ -250,7 +309,7 @@ export default function CondicaoPagamento({ perfil }) {
               <SortableTh col="tipo"         label="Tipo"         sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               <SortableTh col="num_parcelas" label="Nº Parcelas"  sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               <SortableTh col="intervalo"    label="Intervalo"    sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
-              <th>Percentuais</th>
+              <th>Distribuição</th>
               <SortableTh col="criado_em"    label="Cadastrado em" sortBy={sortBy} sortDir={sortDir} onSort={onSort}/>
               {isAdmin && <th></th>}
             </tr>
@@ -259,7 +318,15 @@ export default function CondicaoPagamento({ perfil }) {
             {ordenar(itensFiltrados).map(item => (
               <tr key={item.id} onDoubleClick={() => setVerItem(item)} style={{ cursor:'pointer' }}>
                 <td style={{ color:'var(--texto-sec)', fontSize:12 }}>{item.id}</td>
-                <td style={{ fontWeight:500 }}>{item.descricao}</td>
+                <td>
+                  <div style={{ fontWeight:500 }}>{item.descricao}</div>
+                  {item.tem_entrada && (
+                    <span style={{ fontSize:10, padding:'1px 5px', borderRadius:4,
+                      background:'var(--verde-bg)', color:'var(--verde)', fontWeight:500 }}>
+                      com entrada
+                    </span>
+                  )}
+                </td>
                 <td><Badge tipo={item.tipo}/></td>
                 <td style={{ textAlign:'center', fontWeight:500 }}>{item.num_parcelas}</td>
                 <td style={{ textAlign:'center', color:'var(--texto-sec)' }}>
@@ -268,6 +335,12 @@ export default function CondicaoPagamento({ perfil }) {
                 <td>
                   {item.tipo === 'Desproporcional' && item.percentuais?.length > 0 ? (
                     <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
+                      {item.tem_entrada && item.percentual_entrada != null && (
+                        <span style={{ fontSize:10, padding:'1px 5px', borderRadius:4,
+                          background:'var(--verde-bg)', color:'var(--verde)', fontWeight:500 }}>
+                          P0 (entrada): {fmtPct(item.percentual_entrada)}
+                        </span>
+                      )}
                       {item.percentuais.map((p, i) => (
                         <span key={i} style={{ fontSize:10, padding:'1px 5px', borderRadius:4,
                           background:'var(--lilas-bg)', color:'var(--lilas)', fontWeight:500 }}>
@@ -277,7 +350,9 @@ export default function CondicaoPagamento({ perfil }) {
                     </div>
                   ) : (
                     <span style={{ color:'var(--texto-ter)', fontSize:11 }}>
-                      {item.tipo === 'Proporcional' ? `${(100/item.num_parcelas).toFixed(2)}% × ${item.num_parcelas}` : '—'}
+                      {item.tipo === 'Proporcional'
+                        ? `${(100/item.num_parcelas).toFixed(2)}% × ${item.num_parcelas}${item.tem_entrada ? ' (entrada inclusa)' : ''}`
+                        : '—'}
                     </span>
                   )}
                 </td>
@@ -301,9 +376,10 @@ export default function CondicaoPagamento({ perfil }) {
         </table>
       </div>
 
+      {/* ── Modal de criação/edição ── */}
       {modal && (
         <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setModal(null)}>
-          <div className="modal" style={{ maxWidth:520 }}>
+          <div className="modal" style={{ maxWidth:540 }}>
             <h3>{modal==='novo' ? 'Nova condição de pagamento' : 'Editar condição de pagamento'}</h3>
 
             {modal==='editar' && (
@@ -316,23 +392,12 @@ export default function CondicaoPagamento({ perfil }) {
             <div className="form-group">
               <label>Descrição</label>
               <input autoFocus value={form.descricao||''} onChange={e => setForm({...form,descricao:e.target.value})}
-                placeholder="Ex: 30/60/90 dias"/>
+                placeholder="Ex: Entrada + 3x 30 dias"/>
             </div>
 
             <div className="form-group">
               <label>Tipo</label>
-              <select value={form.tipo||'Proporcional'} onChange={e => {
-                const t = e.target.value
-                setForm(f => ({ ...f, tipo:t }))
-                if (t === 'Desproporcional') {
-                  const n = parseInt(form.num_parcelas,10) || 1
-                  setPcts(prev => {
-                    const next = [...prev]
-                    while (next.length < n) next.push('')
-                    return next.slice(0,n)
-                  })
-                }
-              }}>
+              <select value={form.tipo||'Proporcional'} onChange={e => handleTipoChange(e.target.value)}>
                 {TIPOS.map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
@@ -340,33 +405,69 @@ export default function CondicaoPagamento({ perfil }) {
             <div style={{ display:'flex', gap:12 }}>
               <div className="form-group" style={{ flex:1 }}>
                 <label>Nº de Parcelas</label>
-                <input
-                  type="number" min="1" step="1"
-                  value={form.num_parcelas||''}
-                  onChange={e => handleNumParcelas(e.target.value)}
-                  placeholder="Ex: 3"
-                />
+                <input type="number" min="1" step="1" value={form.num_parcelas||''} placeholder="Ex: 3"
+                  onChange={e => handleNumParcelas(e.target.value)}/>
               </div>
               <div className="form-group" style={{ flex:1 }}>
                 <label>Intervalo <span style={{ color:'var(--texto-ter)', fontSize:11 }}>(dias)</span></label>
-                <input
-                  type="number" min="1" step="1"
-                  value={form.intervalo||''}
-                  onChange={e => setForm({...form, intervalo: parseInt(e.target.value,10)||''})}
-                  placeholder="Ex: 30"
-                />
+                <input type="number" min="1" step="1" value={form.intervalo||''} placeholder="Ex: 30"
+                  onChange={e => setForm({...form, intervalo: parseInt(e.target.value,10)||''})}/>
               </div>
             </div>
 
+            {/* Toggle de entrada */}
+            <div className="form-group">
+              <Toggle
+                ativo={temEntrada}
+                onChange={v => setForm(f => ({ ...f, tem_entrada: v, percentual_entrada: v ? f.percentual_entrada : '' }))}
+                label="Tem entrada (pagamento à vista)"
+              />
+            </div>
+
+            {/* Percentual de entrada — só Desproporcional + tem_entrada */}
+            {isDesprop && temEntrada && (
+              <div className="form-group">
+                <label>
+                  Percentual de entrada — <strong>Parcela 0</strong>
+                  <span style={{ color:'var(--texto-ter)', fontSize:11, marginLeft:6 }}>(%)</span>
+                </label>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <input
+                    type="number" min="0.01" max="99.99" step="0.01"
+                    value={form.percentual_entrada ?? ''}
+                    placeholder="Ex: 30,00"
+                    onChange={e => setForm(f => ({ ...f, percentual_entrada: e.target.value === '' ? '' : parseFloat(e.target.value) }))}
+                    style={{ width:100 }}
+                  />
+                  {pctEntrada > 0 && (
+                    <span style={{ fontSize:12, color:'var(--texto-sec)' }}>
+                      → Parcelas P1–P{np} devem somar <strong>{fmtPct(100 - pctEntrada)}</strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Aviso Proporcional + entrada */}
+            {!isDesprop && temEntrada && (
+              <div style={{
+                background:'var(--amarelo-bg)', border:'0.5px solid #e8c840',
+                borderRadius:8, padding:'10px 12px', marginBottom:12, fontSize:12, color:'#7a5c00'
+              }}>
+                <i className="fa-solid fa-circle-info" style={{ marginRight:6 }}></i>
+                Para pagamento proporcional com entrada, considere a parcela à vista
+                no total de parcelas informado acima. Exemplo: entrada + 2 parcelas = <strong>3 parcelas</strong> no campo Nº de Parcelas.
+              </div>
+            )}
+
+            {/* Percentuais P1..Pn — só Desproporcional */}
             <div className="form-group" style={{ opacity: isDesprop ? 1 : 0.4, transition:'opacity 0.2s' }}>
               <label>
                 Percentuais por parcela
-                {!isDesprop && (
-                  <span style={{ color:'var(--texto-ter)', fontSize:11, marginLeft:6 }}>(disponível apenas para Desproporcional)</span>
-                )}
+                {!isDesprop && <span style={{ color:'var(--texto-ter)', fontSize:11, marginLeft:6 }}>(disponível apenas para Desproporcional)</span>}
               </label>
               {isDesprop ? (
-                <PctInputs n={np} valores={pcts} onChange={setPcts}/>
+                <PctInputs n={np} valores={pcts} onChange={setPcts} somaEsperada={somaEsperada}/>
               ) : (
                 <div style={{ fontSize:12, color:'var(--texto-ter)', padding:'8px 0' }}>
                   Proporcionais: {np} × {(100/np).toFixed(2)}% automaticamente
@@ -382,6 +483,7 @@ export default function CondicaoPagamento({ perfil }) {
         </div>
       )}
 
+      {/* ── ViewModal ── */}
       {verItem && (
         <ViewModal
           titulo={verItem.descricao}
@@ -390,15 +492,25 @@ export default function CondicaoPagamento({ perfil }) {
           onFechar={() => setVerItem(null)}
           onEditar={isAdmin ? () => { abrirEditar(verItem); setVerItem(null) } : null}
           campos={[
-            { label:'ID',           valor:verItem.id },
-            { label:'Descrição',    valor:verItem.descricao },
-            { label:'Tipo',         valor:verItem.tipo },
-            { label:'Nº Parcelas',  valor:verItem.num_parcelas },
-            { label:'Intervalo',    valor:`${verItem.intervalo} dias` },
-            { label:'Percentuais',  valor: verItem.percentuais
-                ? verItem.percentuais.map((p,i)=>`P${i+1}: ${fmtPct(p)}`).join(' | ')
-                : `${(100/(verItem.num_parcelas||1)).toFixed(2)}% × ${verItem.num_parcelas} (proporcional)` },
-            { label:'Cadastrado em', valor:verItem.criado_em, tipo:'datahora' },
+            { label:'ID',             valor: verItem.id },
+            { label:'Descrição',      valor: verItem.descricao },
+            { label:'Tipo',           valor: verItem.tipo },
+            { label:'Tem entrada',    valor: verItem.tem_entrada ? 'Sim' : 'Não' },
+            ...(verItem.tipo === 'Desproporcional' && verItem.tem_entrada && verItem.percentual_entrada != null
+              ? [{ label:'Entrada (P0)', valor: fmtPct(verItem.percentual_entrada) }]
+              : []),
+            { label:'Nº Parcelas',    valor: verItem.num_parcelas },
+            { label:'Intervalo',      valor: `${verItem.intervalo} dias` },
+            { label:'Distribuição',   valor:
+                verItem.tipo === 'Desproporcional' && verItem.percentuais
+                  ? [
+                      verItem.tem_entrada && verItem.percentual_entrada != null
+                        ? `P0 (entrada): ${fmtPct(verItem.percentual_entrada)}`
+                        : null,
+                      ...verItem.percentuais.map((p,i) => `P${i+1}: ${fmtPct(p)}`),
+                    ].filter(Boolean).join(' | ')
+                  : `${(100/(verItem.num_parcelas||1)).toFixed(2)}% × ${verItem.num_parcelas}${verItem.tem_entrada ? ' (entrada inclusa no total)' : ''}` },
+            { label:'Cadastrado em',  valor: verItem.criado_em, tipo:'datahora' },
           ]}
         />
       )}
