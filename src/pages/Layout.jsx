@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
 import Dashboard from './Dashboard'
 import AtividadesDiarias from './AtividadesDiarias'
@@ -16,22 +16,23 @@ import AppZelador from './AppZelador'
 import AppVistorias from './AppVistorias'
 
 const MENU = [
-  { id:'dashboard',    label:'Dashboard' },
-  { id:'atividades',   label:'Atividades do Dia a Dia' },
-  { id:'corretivas',   label:'Intervenções Corretivas' },
-  { id:'benfeitorias', label:'Benfeitorias' },
-  { id:'calendario',   label:'Calendário' },
-  { id:'orcamentos',   label:'Orçamentos de Fornecedores' },
-  { id:'contas',       label:'Contas' },
-  { id:'orc_cond',     label:'Orçamento do Condomínio' },
-  { id:'diario',       label:'Diário de Manutenções' },
-  { id:'solicitacoes', label:'Solicitações de Morador' },
-  { id:'publicacoes',  label:'Publicações' },
-  { id:'cond_pgto',    label:'Condições de Pagamento' },
+  { id:'dashboard',    label:'Dashboard',                    icon:'fa-gauge-high' },
+  { id:'atividades',   label:'Atividades do Dia a Dia',      icon:'fa-list-check' },
+  { id:'corretivas',   label:'Intervenções Corretivas',      icon:'fa-screwdriver-wrench' },
+  { id:'benfeitorias', label:'Benfeitorias',                 icon:'fa-building' },
+  { id:'calendario',   label:'Calendário',                   icon:'fa-calendar-days' },
+  { id:'orcamentos',   label:'Orçamentos de Fornecedores',   icon:'fa-file-invoice-dollar' },
+  { id:'contas',       label:'Contas',                       icon:'fa-book' },
+  { id:'orc_cond',     label:'Orçamento do Condomínio',      icon:'fa-coins' },
+  { id:'diario',       label:'Diário de Manutenções',        icon:'fa-clipboard-list' },
+  { id:'solicitacoes', label:'Solicitações de Morador',      icon:'fa-envelope' },
+  { id:'publicacoes',  label:'Publicações',                  icon:'fa-bullhorn' },
+  { id:'cond_pgto',    label:'Condições de Pagamento',       icon:'fa-money-bill-wave' },
 ]
 
 const MENU_IDS = new Set(MENU.map(m => m.id))
 const STORAGE_KEY = 'oasis_pagina'
+const STORAGE_FIXADO = 'oasis_menu_fixado'
 
 function lerPaginaSalva() {
   try {
@@ -45,6 +46,30 @@ export default function Layout({ perfil }) {
   const [pagina, setPagina] = useState(paginaInicial)
   const [montadas, setMontadas] = useState(() => new Set([paginaInicial]))
   const [modoVistorias, setModoVistorias] = useState(false)
+  const [menuFixado, setMenuFixado] = useState(() => {
+    try { return localStorage.getItem(STORAGE_FIXADO) !== '0' } catch { return true }
+  })
+  const [menuColapsado, setMenuColapsado] = useState(() => {
+    try { return localStorage.getItem(STORAGE_FIXADO) === '0' } catch { return false }
+  })
+  const colapsarTimerRef = useRef(null)
+
+  function alternarFixar() {
+    const novo = !menuFixado
+    setMenuFixado(novo)
+    try { localStorage.setItem(STORAGE_FIXADO, novo ? '1' : '0') } catch {}
+    if (novo) setMenuColapsado(false)
+  }
+  function onMenuMouseEnter() {
+    if (colapsarTimerRef.current) { clearTimeout(colapsarTimerRef.current); colapsarTimerRef.current = null }
+    if (!menuFixado) setMenuColapsado(false)
+  }
+  function onMenuMouseLeave() {
+    if (menuFixado) return
+    if (colapsarTimerRef.current) clearTimeout(colapsarTimerRef.current)
+    colapsarTimerRef.current = setTimeout(() => setMenuColapsado(true), 1200)
+  }
+  useEffect(() => () => { if (colapsarTimerRef.current) clearTimeout(colapsarTimerRef.current) }, [])
 
   // Previne que o "clique de retorno" (ao voltar à janela/aba) feche modais
   // abertos acidentalmente. Durante 500 ms após o foco ser recuperado,
@@ -149,19 +174,47 @@ export default function Layout({ perfil }) {
       {/* Body */}
       <div style={{display:'flex',flex:1,minHeight:0}}>
         {/* Menu lateral */}
-        <div style={{width:210,background:'var(--branco)',borderRight:'0.5px solid var(--borda)',padding:'12px 0',flexShrink:0,overflowY:'auto'}}>
-          <div style={{fontSize:10,color:'var(--texto-ter)',padding:'12px 16px 4px',textTransform:'uppercase',letterSpacing:'0.05em'}}>Menu</div>
+        <div onMouseEnter={onMenuMouseEnter} onMouseLeave={onMenuMouseLeave}
+          style={{
+            width: menuColapsado ? 56 : 210,
+            background:'var(--branco)',borderRight:'0.5px solid var(--borda)',
+            padding:'10px 0',flexShrink:0,overflowY:'auto',overflowX:'hidden',
+            transition:'width 0.18s ease',position:'relative'
+          }}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding: menuColapsado ? '8px' : '12px 12px 4px 16px'}}>
+            {!menuColapsado && (
+              <div style={{fontSize:10,color:'var(--texto-ter)',textTransform:'uppercase',letterSpacing:'0.05em'}}>Menu</div>
+            )}
+            <button onClick={alternarFixar}
+              title={menuFixado ? 'Desafixar (recolher automaticamente)' : 'Fixar menu'}
+              style={{
+                background:'transparent', border:'none', cursor:'pointer',
+                color: menuFixado ? 'var(--azul)' : 'var(--texto-ter)',
+                fontSize:11, padding:'2px 6px', borderRadius:4,
+                transform: menuFixado ? 'rotate(0deg)' : 'rotate(35deg)',
+                transition:'transform 0.18s, color 0.18s',
+                marginLeft: menuColapsado ? 0 : 'auto'
+              }}>
+              <i className="fa-solid fa-thumbtack"></i>
+            </button>
+          </div>
           {MENU.map(m => (
-            <button key={m.id} onClick={() => navegarPara(m.id)} style={{
-              display:'block',width:'100%',padding:'9px 16px',
-              fontSize:13,textAlign:'left',border:'none',
-              borderLeft: pagina===m.id ? '3px solid var(--azul)' : '3px solid transparent',
-              background: pagina===m.id ? 'var(--azul-bg)' : 'transparent',
-              color:      pagina===m.id ? 'var(--azul)'    : 'var(--texto-sec)',
-              fontWeight: pagina===m.id ? 500 : 400,
-              cursor:'pointer',transition:'all 0.15s'
-            }}>
-              {m.label}
+            <button key={m.id} onClick={() => navegarPara(m.id)}
+              title={menuColapsado ? m.label : ''}
+              style={{
+                display:'flex', alignItems:'center', gap:10,
+                width:'100%', padding: menuColapsado ? '10px 0' : '9px 16px',
+                justifyContent: menuColapsado ? 'center' : 'flex-start',
+                fontSize:13, textAlign:'left', border:'none',
+                borderLeft: pagina===m.id ? '3px solid var(--azul)' : '3px solid transparent',
+                background: pagina===m.id ? 'var(--azul-bg)' : 'transparent',
+                color:      pagina===m.id ? 'var(--azul)'    : 'var(--texto-sec)',
+                fontWeight: pagina===m.id ? 500 : 400,
+                cursor:'pointer', transition:'background 0.15s, color 0.15s',
+                whiteSpace:'nowrap', overflow:'hidden'
+              }}>
+              <i className={`fa-solid ${m.icon}`} style={{width:16, fontSize:14, textAlign:'center', flexShrink:0}}></i>
+              {!menuColapsado && <span style={{textOverflow:'ellipsis', overflow:'hidden'}}>{m.label}</span>}
             </button>
           ))}
         </div>

@@ -9,6 +9,34 @@ const TIPOS = {
 }
 const FREQS = ['Diário','Semanal','Quinzenal','Mensal','Bimestral','Trimestral','Semestral','Anual','A Cada 2 Anos','A Cada 3 Anos','A Cada 5 Anos']
 
+const DIAS_FREQ = {
+  'Diário':1,'Semanal':7,'Quinzenal':15,'Mensal':30,
+  'Bimestral':60,'Trimestral':90,'Semestral':180,'Anual':365,
+  'A Cada 2 Anos':730,'A Cada 3 Anos':1095,'A Cada 5 Anos':1825,
+}
+function _addDias(d, n) { const r = new Date(d); r.setDate(r.getDate()+n); return r }
+// Gera ocorrências (Date[]) entre [periodoIni, periodoFim) a partir de uma data semente e frequência
+function gerarOcorrencias(dataSemente, frequencia, pontual, periodoIni, periodoFim) {
+  if (!dataSemente) return []
+  const dataFull = String(dataSemente).length === 7 ? dataSemente + '-01' : dataSemente
+  let cur = new Date(dataFull)
+  if (pontual || !frequencia || !DIAS_FREQ[frequencia]) {
+    return (cur >= periodoIni && cur <= periodoFim) ? [cur] : []
+  }
+  const dias = DIAS_FREQ[frequencia]
+  // Avança até a primeira ocorrência dentro do período
+  while (cur < periodoIni) cur = _addDias(cur, dias)
+  // Recua se passou de periodoFim sem nenhuma ocorrência (não deveria, mas defensivo)
+  const res = []
+  let limite = 0
+  while (cur <= periodoFim && limite < 5000) {
+    res.push(new Date(cur))
+    cur = _addDias(cur, dias)
+    limite++
+  }
+  return res
+}
+
 function fmtData(d) {
   if (!d) return '—'
   const s = String(d).slice(0,10)
@@ -51,7 +79,9 @@ export default function Calendario({ perfil }) {
       _resp:i.responsavel_tipo, _freq:i.frequencia,
       _previsto: i.proxima_data, _realizado: i.status==='realizado' ? (i.realizado_em?.slice(0,10)) : null,
       _feita: i.status==='realizado',
-      _recorrencia: i.frequencia ? 'Recorrente' : 'Pontual'
+      _recorrencia: i.pontual || !i.frequencia ? 'Pontual' : 'Recorrente',
+      _pontual: !!i.pontual,
+      _expandir: !i.pontual && !!i.frequencia   // sinaliza que essa atividade gera ocorrências múltiplas
     }))
     ;(c.data || []).forEach(i => ev.push({
       _tipo:'corretiva', _id:i.id, _nome:i.item,
@@ -74,25 +104,44 @@ export default function Calendario({ perfil }) {
   const ini = vista==='semana' ? inicioSemana(ref) : vista==='mes' ? inicioMes(ref) : inicioAno(ref)
   const fim = vista==='semana' ? fimSemana(ref)    : vista==='mes' ? fimMes(ref)    : fimAno(ref)
 
-  function dataDoEvento(e) { return e._realizado || e._previsto }
+  function dataDoEvento(e) { return e._ocorrencia || e._realizado || e._previsto }
 
-  const eventosFiltrados = eventos.filter(e => {
-    if (filtroStatus === 'pendentes'  && e._feita) return false
-    if (filtroStatus === 'executadas' && !e._feita) return false
+  // Aplica filtros de tipo/responsável/freq/recorrência primeiro
+  const eventosFiltradosBase = eventos.filter(e => {
     if (filtroTipo !== 'Todos' && e._tipo !== filtroTipo) return false
     if (filtroResp !== 'Todos' && e._resp !== filtroResp) return false
     if (filtroFreq !== 'Todos' && e._freq !== filtroFreq) return false
     if (filtroRec  !== 'Todos' && e._recorrencia !== filtroRec) return false
-    const d = dataDoEvento(e)
-    if (!d) return false
-    const dt = new Date(d)
-    return dt >= ini && dt <= fim
+    return true
   })
 
-  // Cards: No Prazo / Atrasadas
+  // Expande recorrências e aplica filtro de status + range
+  const eventosFiltrados = []
+  for (const e of eventosFiltradosBase) {
+    if (e._tipo === 'atividade' && e._expandir && e._previsto && !e._feita) {
+      // Gera múltiplas ocorrências dentro do range visível para atividades recorrentes pendentes
+      const ocorr = gerarOcorrencias(e._previsto, e._freq, false, ini, fim)
+      for (const dt of ocorr) {
+        if (filtroStatus === 'executadas') continue  // ocorrências futuras não são executadas
+        const dtIso = dt.toISOString().slice(0,10)
+        eventosFiltrados.push({ ...e, _ocorrencia: dtIso })
+      }
+    } else {
+      // Item pontual / corretiva / benfeitoria / atividade já realizada — único evento
+      if (filtroStatus === 'pendentes'  && e._feita) continue
+      if (filtroStatus === 'executadas' && !e._feita) continue
+      const d = dataDoEvento(e)
+      if (!d) continue
+      const dt = new Date(d)
+      if (dt < ini || dt > fim) continue
+      eventosFiltrados.push(e)
+    }
+  }
+
+  // Cards: No Prazo / Atrasadas (usa eventos expandidos do range visível)
   const hoje = new Date(); hoje.setHours(0,0,0,0)
-  const noPrazo = eventos.filter(e => !e._feita && e._previsto && new Date(e._previsto) >= hoje).length
-  const atrasadas = eventos.filter(e => !e._feita && e._previsto && new Date(e._previsto) < hoje).length
+  const noPrazo   = eventosFiltrados.filter(e => !e._feita && new Date(dataDoEvento(e)) >= hoje).length
+  const atrasadas = eventosFiltrados.filter(e => !e._feita && new Date(dataDoEvento(e)) <  hoje).length
 
   function navegar(delta) {
     const d = new Date(ref)
