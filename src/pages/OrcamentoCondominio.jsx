@@ -81,13 +81,13 @@ function gerarOcorrencias(dataStr, frequencia, pontual, vigDe, vigAte) {
   while (cur < periodoFim) { res.push(new Date(cur)); cur = addDias(cur, dias) }
   return res
 }
-function calcularTotaisFornecedor(contaId, calData, corrData, benfData, mesesOrc) {
+function calcularTotaisFornecedor(contaId, calData, corrData, benfData, mesesOrc, campoValor='valor_previsto') {
   const vigDe = mesesOrc[0], vigAte = mesesOrc[mesesOrc.length-1]
   const totais = {}; mesesOrc.forEach(m => { totais[m] = 0 })
   const processar = (rows, dataField, freqField, pontualField) => {
     for (const row of (rows||[])) {
       if (row.conta_id !== contaId) continue
-      const v = parseFloat(row.valor_previsto) || 0; if (!v) continue
+      const v = parseFloat(row[campoValor]) || 0; if (!v) continue
       const ocorr = gerarOcorrencias(row[dataField], row[freqField], pontualField ? row[pontualField] : null, vigDe, vigAte)
       for (const d of ocorr) {
         const mes = dateParaMes(d.toISOString().slice(0,10))
@@ -168,6 +168,7 @@ function ModalAddConta({ contas, jaAdicionadas, onSelect, onClose }) {
 // ─── Main ──────────────────────────────────────────────────────────────────────────────────────
 export default function OrcamentoCondominio({ perfil }) {
   const [view, setView] = useState('lista')
+  const [modoVisao, setModoVisao] = useState('previsto')  // previsto | realizado | ambos
   const [orcamentos, setOrcamentos] = useState([])
   const [orcAtual, setOrcAtual] = useState(null)
   const [formHeader, setFormHeader] = useState({descricao:'',vigencia_de:'',vigencia_ate:'',saldo_inicial:0,status:'Ativo'})
@@ -223,7 +224,7 @@ export default function OrcamentoCondominio({ perfil }) {
           vals[mes]={dbValorId:null,previsto:0,auto:true}
         } else {
           const found=valoresData.find(v=>v.item_id===item.id&&dateParaMes(v.competencia)===mes)
-          vals[mes]={dbValorId:found?.id||null,previsto:found?.valor_previsto??0,auto:false}
+          vals[mes]={dbValorId:found?.id||null,previsto:found?.valor_previsto??0,realizado:found?.valor_realizado??0,auto:false}
         }
       })
       return {tempId:`db_${item.id}`,dbId:item.id,conta:item.conta,valores:vals}
@@ -232,9 +233,16 @@ export default function OrcamentoCondominio({ perfil }) {
     if (fornItems.length>0 && mesesOrc.length>0) {
       const fornContaIds=[...new Set(fornItems.map(i=>i.conta.id))]
       const {calData,corrData,benfData}=await buscarDadosFonteEmBatch(fornContaIds)
+      // Recarrega data com valor_realizado também
+      const [{data:calDataR},{data:corrDataR},{data:benfDataR}]=await Promise.all([
+        supabase.from('calendario').select('conta_id,valor_realizado,proxima_data,frequencia,pontual,realizado_em').in('conta_id',fornContaIds).is('excluido_em',null),
+        supabase.from('corretivas').select('conta_id,valor_realizado,data_inicio_prevista,recorrencia,data_fim,data_inicio_real').in('conta_id',fornContaIds).is('excluido_em',null),
+        supabase.from('benfeitorias').select('conta_id,valor_realizado,previsto,recorrencia,realizado,data_inicio_real').in('conta_id',fornContaIds).is('excluido_em',null),
+      ])
       for (const item of fornItems) {
-        const totais=calcularTotaisFornecedor(item.conta.id,calData,corrData,benfData,mesesOrc)
-        mesesOrc.forEach(mes=>{ item.valores[mes]={dbValorId:null,previsto:totais[mes]||0,auto:true} })
+        const totaisP=calcularTotaisFornecedor(item.conta.id,calData,corrData,benfData,mesesOrc,'valor_previsto')
+        const totaisR=calcularTotaisFornecedor(item.conta.id,calDataR||[],corrDataR||[],benfDataR||[],mesesOrc,'valor_realizado')
+        mesesOrc.forEach(mes=>{ item.valores[mes]={dbValorId:null,previsto:totaisP[mes]||0,realizado:totaisR[mes]||0,auto:true} })
       }
     }
     setFormItens(items)
@@ -433,14 +441,18 @@ export default function OrcamentoCondominio({ perfil }) {
   // ─── Computed ─────────────────────────────────────────────────────────────────────────────────────
   function computeView() {
     const saldoP={}
+    const saldoR={}
     const si=parseFloat(formHeader.saldo_inicial)||0
     meses.forEach((mes,idx)=>{
-      if(idx===0){ saldoP[mes]=si }
+      if(idx===0){ saldoP[mes]=si; saldoR[mes]=si }
       else {
         const prev=meses[idx-1]
         const rP=formItens.filter(i=>i.conta.tipo_conta==='Receita').reduce((s,i)=>s+(i.valores[prev]?.previsto||0),0)
         const gP=formItens.filter(i=>i.conta.tipo_conta==='Gasto').reduce((s,i)=>s+(i.valores[prev]?.previsto||0),0)
+        const rR=formItens.filter(i=>i.conta.tipo_conta==='Receita').reduce((s,i)=>s+(i.valores[prev]?.realizado||0),0)
+        const gR=formItens.filter(i=>i.conta.tipo_conta==='Gasto').reduce((s,i)=>s+(i.valores[prev]?.realizado||0),0)
         saldoP[mes]=saldoP[prev]+rP-gP
+        saldoR[mes]=saldoR[prev]+rR-gR
       }
     })
     const g1R=formItens.filter(i=>i.conta.grupo_orcamentario==='Atividades do Dia a Dia'&&i.conta.tipo_conta==='Receita')
@@ -450,7 +462,10 @@ export default function OrcamentoCondominio({ perfil }) {
     const totalPrevisto=formItens.reduce((s,i)=>s+meses.reduce((ss,m)=>{
       const v=i.valores[m]?.previsto||0; return ss+(i.conta.tipo_conta==='Gasto'?-v:v)
     },0),0)
-    return {saldoP,g1R,g1G,g2R,g2G,totalPrevisto}
+    const totalRealizado=formItens.reduce((s,i)=>s+meses.reduce((ss,m)=>{
+      const v=i.valores[m]?.realizado||0; return ss+(i.conta.tipo_conta==='Gasto'?-v:v)
+    },0),0)
+    return {saldoP,saldoR,g1R,g1G,g2R,g2G,totalPrevisto,totalRealizado}
   }
 
   function exportarExcel() {
@@ -498,6 +513,9 @@ export default function OrcamentoCondominio({ perfil }) {
     const bg=idx%2===0?'#fff':'#f0f7ff'
     const isForn=item.conta?.origem_orcamento==='Orçamento de Fornecedores'
     const acumP=meses.reduce((s,m)=>s+(item.valores[m]?.previsto||0),0)
+    const acumR=meses.reduce((s,m)=>s+(item.valores[m]?.realizado||0),0)
+    const showP = editavel || modoVisao !== 'realizado'
+    const showR = !editavel && (modoVisao === 'realizado' || modoVisao === 'ambos')
     return (
       <tr key={item.tempId} style={{background:bg}}>
         <td style={{...tdBase,...stickyLeft(0,65),background:bg,textAlign:'left',color:'var(--texto-ter)',fontFamily:'monospace',fontSize:11}}>
@@ -521,31 +539,51 @@ export default function OrcamentoCondominio({ perfil }) {
         </td>
         {meses.map(mes=>{
           const numP=item.valores[mes]?.previsto||0
-          if (editavel && !isForn) {
-            return (
-              <td key={mes} style={{...tdBase,padding:0,minWidth:100}}>
-                <input value={moedaInputValue(numP)||''}
-                  onChange={e=>updatePrevisto(item.tempId,mes,e.target.value)}
-                  onBlur={()=>handlePrevistoBlur(item.tempId,mes)}
-                  style={{width:'100%',border:'none',outline:'none',background:'transparent',
-                    textAlign:'right',padding:'6px 8px',fontSize:12,color:corValor,
-                    boxSizing:'border-box',fontFamily:'inherit'}}
-                  placeholder="R$ 0,00"/>
-              </td>
-            )
-          } else {
-            const bgCell=isForn&&editavel?'#fffdf0':'transparent'
-            return (
-              <td key={mes} style={{...tdBase,color:corValor,background:bgCell,minWidth:100}}>
-                {numP?fmtMoedaCompact(numP,item.conta.tipo_conta):''}
-                {isForn&&editavel&&numP>0&&<i className="fa-solid fa-calculator" style={{fontSize:8,color:'#b8960c',marginLeft:4}}></i>}
+          const numR=item.valores[mes]?.realizado||0
+          const cells = []
+          if (showP) {
+            if (editavel && !isForn) {
+              cells.push(
+                <td key={mes+'_p'} style={{...tdBase,padding:0,minWidth:100}}>
+                  <input value={moedaInputValue(numP)||''}
+                    onChange={e=>updatePrevisto(item.tempId,mes,e.target.value)}
+                    onBlur={()=>handlePrevistoBlur(item.tempId,mes)}
+                    style={{width:'100%',border:'none',outline:'none',background:'transparent',
+                      textAlign:'right',padding:'6px 8px',fontSize:12,color:corValor,
+                      boxSizing:'border-box',fontFamily:'inherit'}}
+                    placeholder="R$ 0,00"/>
+                </td>
+              )
+            } else {
+              const bgCell=isForn&&editavel?'#fffdf0':'transparent'
+              cells.push(
+                <td key={mes+'_p'} style={{...tdBase,color:corValor,background:bgCell,minWidth:100}}>
+                  {numP?fmtMoedaCompact(numP,item.conta.tipo_conta):''}
+                  {isForn&&editavel&&numP>0&&<i className="fa-solid fa-calculator" style={{fontSize:8,color:'#b8960c',marginLeft:4}}></i>}
+                </td>
+              )
+            }
+          }
+          if (showR) {
+            cells.push(
+              <td key={mes+'_r'} style={{...tdBase,color:corValor,minWidth:100,fontStyle: numR === 0 ? 'normal' : 'normal',background: modoVisao==='ambos' ? '#f6f9fc' : 'transparent'}}>
+                {numR?fmtMoedaCompact(numR,item.conta.tipo_conta):''}
+                {isForn && numR>0 && <i className="fa-solid fa-calculator" style={{fontSize:8,color:'#b8960c',marginLeft:4}} title="Calculado dos items realizados"></i>}
               </td>
             )
           }
+          return cells
         })}
-        <td style={{...tdBase,color:corValor,fontWeight:600,minWidth:110}}>
-          {acumP?fmtMoedaCompact(acumP,item.conta.tipo_conta):''}
-        </td>
+        {showP && (
+          <td style={{...tdBase,color:corValor,fontWeight:600,minWidth:110}}>
+            {acumP?fmtMoedaCompact(acumP,item.conta.tipo_conta):''}
+          </td>
+        )}
+        {showR && (
+          <td style={{...tdBase,color:corValor,fontWeight:600,minWidth:110,background: modoVisao==='ambos' ? '#f6f9fc' : 'transparent'}}>
+            {acumR?fmtMoedaCompact(acumR,item.conta.tipo_conta):''}
+          </td>
+        )}
         {editavel && (
           <td style={{...tdBase,textAlign:'center',minWidth:40}}>
             <button className="btn btn-sm btn-danger" onClick={()=>removerItem(item.tempId)} title="Remover">
@@ -579,6 +617,8 @@ export default function OrcamentoCondominio({ perfil }) {
   }
   function renderSubtotalRow(label,gasItems,editavel) {
     const bg='#dbeafe'
+    const showP = editavel || modoVisao !== 'realizado'
+    const showR = !editavel && (modoVisao === 'realizado' || modoVisao === 'ambos')
     return (
       <tr key={`sub_${label}`} style={{background:bg,fontWeight:700}}>
         <td colSpan={5} style={{...tdBase,background:bg,position:'sticky',left:0,zIndex:2,
@@ -587,17 +627,22 @@ export default function OrcamentoCondominio({ perfil }) {
         </td>
         {meses.map(mes=>{
           const gP=gasItems.reduce((s,i)=>s+(i.valores[mes]?.previsto||0),0)
-          return <td key={mes} style={{...tdBase,background:bg,color:'#7f1f1f',fontWeight:700}}>
-            {gP>0?fmtMoeda(gP):'—'}
-          </td>
+          const gR=gasItems.reduce((s,i)=>s+(i.valores[mes]?.realizado||0),0)
+          const cells=[]
+          if (showP) cells.push(<td key={mes+'_p'} style={{...tdBase,background:bg,color:'#7f1f1f',fontWeight:700}}>{gP>0?fmtMoeda(gP):'—'}</td>)
+          if (showR) cells.push(<td key={mes+'_r'} style={{...tdBase,background:'#cfd9eb',color:'#7f1f1f',fontWeight:700}}>{gR>0?fmtMoeda(gR):'—'}</td>)
+          return cells
         })}
-        <td style={{...tdBase,background:bg}}></td>
+        {showP && <td style={{...tdBase,background:bg}}></td>}
+        {showR && <td style={{...tdBase,background:'#cfd9eb'}}></td>}
         {editavel&&<td style={{...tdBase,background:bg}}></td>}
       </tr>
     )
   }
-  function renderSaldoFinalRow(saldoP,editavel) {
+  function renderSaldoFinalRow(saldoP,saldoR,editavel) {
     const bg='#1e3a5f'
+    const showP = editavel || modoVisao !== 'realizado'
+    const showR = !editavel && (modoVisao === 'realizado' || modoVisao === 'ambos')
     return (
       <tr key="saldo_final" style={{background:bg,fontWeight:700}}>
         <td colSpan={5} style={{...tdBase,background:bg,position:'sticky',left:0,zIndex:2,
@@ -607,13 +652,18 @@ export default function OrcamentoCondominio({ perfil }) {
         {meses.map(mes=>{
           const rP=formItens.filter(i=>i.conta.tipo_conta==='Receita').reduce((s,i)=>s+(i.valores[mes]?.previsto||0),0)
           const gP=formItens.filter(i=>i.conta.tipo_conta==='Gasto').reduce((s,i)=>s+(i.valores[mes]?.previsto||0),0)
-          const sf=(saldoP[mes]||0)+rP-gP
-          return <td key={mes} style={{...tdBase,background:bg,color:sf>=0?'#86efac':'#fca5a5',fontWeight:700}}>
-            {fmtMoeda(sf)}
-          </td>
+          const rR=formItens.filter(i=>i.conta.tipo_conta==='Receita').reduce((s,i)=>s+(i.valores[mes]?.realizado||0),0)
+          const gR=formItens.filter(i=>i.conta.tipo_conta==='Gasto').reduce((s,i)=>s+(i.valores[mes]?.realizado||0),0)
+          const sfP=(saldoP[mes]||0)+rP-gP
+          const sfR=(saldoR?.[mes]||0)+rR-gR
+          const cells=[]
+          if (showP) cells.push(<td key={mes+'_p'} style={{...tdBase,background:bg,color:'#fff'}}>{fmtMoeda(sfP)}</td>)
+          if (showR) cells.push(<td key={mes+'_r'} style={{...tdBase,background:'#36578a',color:'#fff'}}>{fmtMoeda(sfR)}</td>)
+          return cells
         })}
-        <td style={{...tdBase,background:bg}}></td>
-        {editavel&&<td style={{...tdBase,background:bg}}></td>}
+        {showP && <td style={{...tdBase,background:bg}}></td>}
+        {showR && <td style={{...tdBase,background:'#36578a'}}></td>}
+        {editavel && <td style={{...tdBase,background:bg}}></td>}
       </tr>
     )
   }
@@ -678,7 +728,7 @@ export default function OrcamentoCondominio({ perfil }) {
   // ─── RENDER: Form ───────────────────────────────────────────────────────────────────────────────────
   if (view==='form') {
     const jaAdicionadas=new Set(formItens.map(i=>i.conta.id))
-    const {saldoP,g1R,g1G,g2R,g2G}=meses.length>0?computeView():{saldoP:{},g1R:[],g1G:[],g2R:[],g2G:[]}
+    const {saldoP,saldoR,g1R,g1G,g2R,g2G}=meses.length>0?computeView():{saldoP:{},saldoR:{},g1R:[],g1G:[],g2R:[],g2G:[]}
     return (
       <div>
         <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
@@ -797,7 +847,7 @@ export default function OrcamentoCondominio({ perfil }) {
                   {g2G.map((item,idx)=>renderItemRow(item,idx,true))}
                   {(g2R.length>0||g2G.length>0)&&renderSubtotalRow('Subtotal - Intervenções Corretivas e Benfeitorias',g2G,true)}
                   {formItens.filter(i=>!['Atividades do Dia a Dia','Intervenções Corretivas','Benfeitorias'].includes(i.conta.grupo_orcamentario)).map((item,idx)=>renderItemRow(item,idx,true))}
-                  {formItens.length>0&&renderSaldoFinalRow(saldoP,true)}
+                  {formItens.length>0&&renderSaldoFinalRow(saldoP,saldoR,true)}
                 </tbody>
               </table>
             </div>
@@ -813,20 +863,24 @@ export default function OrcamentoCondominio({ perfil }) {
   // ─── RENDER: View ───────────────────────────────────────────────────────────────────────────────────
   if (view==='view') {
     if (loading) return <div style={{padding:40,textAlign:'center',color:'var(--texto-sec)'}}>Carregando...</div>
-    const {saldoP,g1R,g1G,g2R,g2G,totalPrevisto}=computeView()
-    const colTotal=5+meses.length+1
+    const {saldoP,saldoR,g1R,g1G,g2R,g2G,totalPrevisto,totalRealizado}=computeView()
+    const colTotal = 5 + meses.length * (modoVisao==='ambos'?2:1) + (modoVisao==='ambos'?2:1)
+    const showP_si = modoVisao !== 'realizado'
+    const showR_si = modoVisao === 'realizado' || modoVisao === 'ambos'
     const saldoInicialRow=(
       <tr key="saldo_ini" style={{background:'#e8f0fe',fontWeight:600}}>
         <td colSpan={5} style={{...tdBase,position:'sticky',left:0,zIndex:2,background:'#e8f0fe',
           textAlign:'left',fontWeight:700,color:'#1e3a5f',fontSize:12}}>
           <i className="fa-solid fa-wallet" style={{marginRight:8}}></i>Saldo Inicial
         </td>
-        {meses.map(mes=>(
-          <td key={mes} style={{...tdBase,background:'#e8f0fe',color:'#1e3a5f',fontWeight:700}}>
-            {fmtMoeda(saldoP[mes])}
-          </td>
-        ))}
-        <td style={{...tdBase,background:'#e8f0fe'}}></td>
+        {meses.map(mes=>{
+          const cells=[]
+          if (showP_si) cells.push(<td key={mes+'_p'} style={{...tdBase,background:'#e8f0fe',color:'#1e3a5f',fontWeight:700}}>{fmtMoeda(saldoP[mes])}</td>)
+          if (showR_si) cells.push(<td key={mes+'_r'} style={{...tdBase,background:'#dde7f9',color:'#1e3a5f',fontWeight:700}}>{fmtMoeda(saldoR?.[mes]||0)}</td>)
+          return cells
+        })}
+        {showP_si && <td style={{...tdBase,background:'#e8f0fe'}}></td>}
+        {showR_si && <td style={{...tdBase,background:'#dde7f9'}}></td>}
       </tr>
     )
     return (
@@ -842,6 +896,16 @@ export default function OrcamentoCondominio({ perfil }) {
           {isAdmin&&<button className="btn btn-sm" onClick={()=>editarOrcamento(orcAtual)}>
             <i className="fa-solid fa-pen" style={{marginRight:6}}></i>Editar
           </button>}
+          <div style={{display:'flex',border:'0.5px solid var(--borda)',borderRadius:6,overflow:'hidden'}}>
+            {[['previsto','Previsto'],['realizado','Realizado'],['ambos','Ambos']].map(([v,l]) => (
+              <button key={v} onClick={()=>setModoVisao(v)} style={{
+                padding:'5px 10px', fontSize:11, fontWeight:500, border:'none',
+                background: modoVisao===v ? 'var(--azul)' : 'var(--branco)',
+                color: modoVisao===v ? '#fff' : 'var(--texto-sec)',
+                cursor:'pointer'
+              }}>{l}</button>
+            ))}
+          </div>
           <button className="btn btn-sm" onClick={exportarExcel}>
             <i className="fa-solid fa-file-excel" style={{marginRight:6}}></i>Exportar Excel
           </button>
@@ -850,6 +914,10 @@ export default function OrcamentoCondominio({ perfil }) {
           <div className="stat">
             <div className="stat-n" style={{color:'var(--azul)',fontSize:18}}>{fmtMoeda(totalPrevisto)}</div>
             <div className="stat-l">Total Previsto (líquido)</div>
+          </div>
+          <div className="stat">
+            <div className="stat-n" style={{color:'var(--verde)',fontSize:18}}>{fmtMoeda(totalRealizado)}</div>
+            <div className="stat-l">Total Realizado (líquido)</div>
           </div>
           <div className="stat">
             <div className="stat-n">{formItens.length}</div>
@@ -874,8 +942,15 @@ export default function OrcamentoCondominio({ perfil }) {
                   <th style={{...thBase,...stickyLeft(265,75),zIndex:6}}>Tipo</th>
                   <th style={{...thBase,minWidth:120,textAlign:'left'}}>Grupo</th>
                   <th style={{...thBase,minWidth:80}}>Origem</th>
-                  {meses.map(m=><th key={m} style={{...thBase,minWidth:100}}>Prev. {fmtMesLabel(m)}</th>)}
-                  <th style={{...thBase,minWidth:110}}>Acum. Previsto</th>
+                  {meses.map(m=>{
+                    const cells=[]
+                    if (modoVisao !== 'realizado') cells.push(<th key={m+'_p'} style={{...thBase,minWidth:100}}>{modoVisao==='ambos'?`Prev. ${fmtMesLabel(m)}`:`Prev. ${fmtMesLabel(m)}`}</th>)
+                    if (modoVisao === 'realizado') cells.push(<th key={m+'_r'} style={{...thBase,minWidth:100,background:'#0f4f5e'}}>{`Real. ${fmtMesLabel(m)}`}</th>)
+                    if (modoVisao === 'ambos')     cells.push(<th key={m+'_r'} style={{...thBase,minWidth:100,background:'#0f4f5e'}}>{`Real. ${fmtMesLabel(m)}`}</th>)
+                    return cells
+                  })}
+                  {modoVisao !== 'realizado' && <th style={{...thBase,minWidth:110}}>Acum. Previsto</th>}
+                  {(modoVisao === 'realizado' || modoVisao === 'ambos') && <th style={{...thBase,minWidth:110,background:'#0f4f5e'}}>Acum. Realizado</th>}
                 </tr>
               </thead>
               <tbody>
@@ -897,7 +972,7 @@ export default function OrcamentoCondominio({ perfil }) {
                     Nenhuma conta cadastrada neste orçamento
                   </td></tr>
                 )}
-                {formItens.length>0&&renderSaldoFinalRow(saldoP,false)}
+                {formItens.length>0&&renderSaldoFinalRow(saldoP,saldoR,false)}
               </tbody>
             </table>
           </div>
