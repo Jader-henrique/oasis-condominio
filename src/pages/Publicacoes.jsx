@@ -3,7 +3,7 @@ import { supabase } from '../supabase'
 import { exportarParaExcel } from '../utils/excel'
 import ViewModal from './ViewModal'
 
-const TIPOS = ['Ata','Projeto','Plano','Contrato','Comunicado','Outro']
+const TIPOS = ['Ata','Projeto','Plano','Contrato','Comunicado','Documentos Técnicos','Prestação de Contas','Reuniões e Assembleias','Societário do Condomínio','Outro']
 
 function fmtData(d) {
   if (!d) return '—'

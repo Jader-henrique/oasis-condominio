@@ -8,10 +8,18 @@ const TIPOS = {
 }
 
 function hojeISO() { return new Date().toISOString().slice(0,10) }
+function fmtDataBR(d) {
+  if (!d) return null
+  const s = String(d).slice(0,10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  const [y,m,day] = s.split('-')
+  return `${day}/${m}/${y}`
+}
 
 export default function AppVistorias({ perfil }) {
   const [tarefas, setTarefas] = useState([])
   const [filtroTipo, setFiltroTipo] = useState('todos')
+  const [busca, setBusca] = useState('')
   const [modal, setModal] = useState(null)
   const [form, setForm] = useState({})
   const [arquivos, setArquivos] = useState([])
@@ -28,9 +36,18 @@ export default function AppVistorias({ perfil }) {
       supabase.from('benfeitorias').select('*').is('excluido_em', null),
     ])
     const lista = []
-    ;(a.data || []).forEach(i => lista.push({ _origem:'atividade', _id:i.id, _nome:i.descricao, _resp:i.responsavel_tipo, _feita: i.status==='realizado', ...i }))
-    ;(c.data || []).forEach(i => lista.push({ _origem:'corretiva', _id:i.id, _nome:i.item, _resp:i.responsavel_tipo, _feita: i.status==='realizado', ...i }))
-    ;(b.data || []).forEach(i => lista.push({ _origem:'benfeitoria', _id:i.id, _nome:i.sistema, _resp:i.responsavel_tipo, _feita: !!i.realizado, ...i }))
+    ;(a.data || []).forEach(i => lista.push({
+      _origem:'atividade', _id:i.id, _nome:i.descricao, _resp:i.responsavel_tipo,
+      _data: i.proxima_data, _feita: i.status==='realizado', ...i
+    }))
+    ;(c.data || []).forEach(i => lista.push({
+      _origem:'corretiva', _id:i.id, _nome:i.item, _resp:i.responsavel_tipo,
+      _data: i.data_inicio_prevista || i.data_inicio_real, _feita: i.status==='realizado', ...i
+    }))
+    ;(b.data || []).forEach(i => lista.push({
+      _origem:'benfeitoria', _id:i.id, _nome:i.sistema, _resp:i.responsavel_tipo,
+      _data: i.previsto || i.data_inicio_real, _feita: !!i.realizado, ...i
+    }))
     setTarefas(lista)
   }
 
@@ -65,7 +82,16 @@ export default function AppVistorias({ perfil }) {
     setTimeout(() => { setModal(null); setSucesso(false) }, 1500)
   }
 
-  const filtradas = tarefas.filter(t => filtroTipo === 'todos' || t._origem === filtroTipo)
+  const filtradas = tarefas
+    .filter(t => filtroTipo === 'todos' || t._origem === filtroTipo)
+    .filter(t => !busca || String(t._nome||'').toLowerCase().includes(busca.toLowerCase()))
+    .sort((a,b) => {
+      // sem data vai para o fim
+      if (!a._data && !b._data) return 0
+      if (!a._data) return 1
+      if (!b._data) return -1
+      return String(a._data).localeCompare(String(b._data))
+    })
   const hoje = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long' })
 
   return (
@@ -77,7 +103,7 @@ export default function AppVistorias({ perfil }) {
       </div>
 
       <div style={{padding:'16px'}}>
-        <div style={{display:'flex', gap:6, marginBottom:14, flexWrap:'wrap'}}>
+        <div style={{display:'flex', gap:6, marginBottom:10, flexWrap:'wrap'}}>
           {[
             {v:'todos', l:'Todos'},
             {v:'atividade', l:'Atividades'},
@@ -93,6 +119,21 @@ export default function AppVistorias({ perfil }) {
           ))}
         </div>
 
+        <div style={{position:'relative', marginBottom:12}}>
+          <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',top:10,left:12,color:'var(--texto-ter)',fontSize:13}}></i>
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome..."
+            style={{width:'100%',padding:'8px 12px 8px 34px',borderRadius:8,border:'0.5px solid var(--borda)',fontSize:13}}/>
+          {busca && (
+            <button onClick={() => setBusca('')} style={{position:'absolute',top:7,right:8,background:'transparent',border:'none',cursor:'pointer',color:'var(--texto-ter)',fontSize:13}} title="Limpar">
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+          )}
+        </div>
+
+        <div style={{fontSize:11, color:'var(--texto-sec)', marginBottom:8}}>
+          {filtradas.length} {filtradas.length === 1 ? 'item' : 'itens'}
+        </div>
+
         {filtradas.length === 0 && <div style={{textAlign:'center', padding:40, color:'var(--texto-ter)'}}>Nenhum item</div>}
 
         {filtradas.map(t => {
@@ -103,8 +144,9 @@ export default function AppVistorias({ perfil }) {
               borderTop: '3px solid ' + cfg.cor,
               borderRadius:12, padding:'13px 14px', marginBottom:8, cursor:'pointer'
             }}>
-              <div style={{fontSize:10, color:cfg.cor, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:3, fontWeight:500}}>
-                {cfg.label} · {t._resp || '—'}
+              <div style={{fontSize:10, color:cfg.cor, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:3, fontWeight:500, display:'flex', justifyContent:'space-between'}}>
+                <span>{cfg.label} · {t._resp || '—'}</span>
+                {t._data && <span style={{color:'var(--texto-sec)', fontWeight:500}}><i className="fa-solid fa-calendar" style={{marginRight:4}}></i>{fmtDataBR(t._data)}</span>}
               </div>
               <div style={{fontWeight:500, fontSize:13}}>{t._nome}</div>
               {t._feita && <div style={{fontSize:11, color:'var(--verde)', marginTop:3}}><i className="fa-solid fa-check" style={{marginRight:3}}></i>Já executado</div>}
