@@ -161,7 +161,7 @@ export default function Orcamentos({ perfil }) {
 
   async function carregar() {
     const [o, c, cor, b] = await Promise.all([
-      supabase.from('orcamentos').select('*').is('excluido_em', null).order('data_criacao', { ascending:false }),
+      supabase.from('orcamentos').select('*, condicao:condicao_pagamento_id(descricao)').is('excluido_em', null).order('data_criacao', { ascending:false }),
       supabase.from('calendario').select('id,num,descricao,valor').is('excluido_em', null),
       supabase.from('corretivas').select('id,num,item,valor').is('excluido_em', null),
       supabase.from('benfeitorias').select('id,num,sistema,valor').is('excluido_em', null),
@@ -461,7 +461,7 @@ export default function Orcamentos({ perfil }) {
             { label:'Valor',                valor:verItem.valor, tipo:'moeda' },
             { label:'Data orçamento',       valor:verItem.data, tipo:'data' },
             { label:'Prazo de entrega',     valor:verItem.prazo_entrega },
-            { label:'Condição pagamento',   valor:verItem.condicao_pagamento_nome || (verItem.condicao_pagamento_id ? `Condição #${verItem.condicao_pagamento_id}` : '—') },
+            { label:'Condição pagamento',   valor: verItem.condicao?.descricao || verItem.condicao_pagamento_nome || null },
             { label:'Sem orçamento (emerg.)', valor:verItem.sem_orcamento, tipo:'bool' },
             { label:'Selecionado',          valor:verItem.selecionado, tipo:'bool' },
             { label:'Motivo da escolha',    valor:verItem.motivo_escolha, tipo:'longtext' },
