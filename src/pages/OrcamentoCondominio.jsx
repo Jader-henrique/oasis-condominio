@@ -884,8 +884,7 @@ export default function OrcamentoCondominio({ perfil }) {
       </tr>
     )
     return (
-      <>
-        <div>
+      <div>
         <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16,flexWrap:'wrap'}}>
           <button className="btn" onClick={()=>setView('lista')}><i className="fa-solid fa-arrow-left" style={{marginRight:6}}></i>Voltar</button>
           <div style={{flex:1}}>
@@ -983,9 +982,8 @@ export default function OrcamentoCondominio({ perfil }) {
             </table>
           </div>
         </div>
-        </div>
         <ModalImportacao/>
-      </>
+      </div>
     )
   }
 
