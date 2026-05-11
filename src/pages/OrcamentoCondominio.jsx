@@ -169,6 +169,8 @@ function ModalAddConta({ contas, jaAdicionadas, onSelect, onClose }) {
 export default function OrcamentoCondominio({ perfil }) {
   const [view, setView] = useState('lista')
   const [modoVisao, setModoVisao] = useState('previsto')  // previsto | realizado | ambos
+  const [importModal, setImportModal] = useState(null)  // { lancamentos, resultado, importando }
+  const importFileRef = useRef(null)
   const [orcamentos, setOrcamentos] = useState([])
   const [orcAtual, setOrcAtual] = useState(null)
   const [formHeader, setFormHeader] = useState({descricao:'',vigencia_de:'',vigencia_ate:'',saldo_inicial:0,status:'Ativo'})
@@ -439,6 +441,70 @@ export default function OrcamentoCondominio({ perfil }) {
   }
 
   // ─── Computed ─────────────────────────────────────────────────────────────────────────────────────
+  async function abrirImportador() {
+    setImportModal({ lancamentos:[], resultado:null, importando:false })
+    setTimeout(() => importFileRef.current?.click(), 50)
+  }
+
+  async function handleArquivoImportacao(file) {
+    if (!file) return
+    try {
+      const ab = await file.arrayBuffer()
+      const wb = XLSX.read(ab, { type:'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null })
+      if (rows.length < 2) { alert('Planilha vazia'); return }
+      const header = rows[0].map(h => String(h||'').trim().toLowerCase())
+      const idxComp = header.findIndex(h => h.includes('compet'))
+      const idxCod  = header.findIndex(h => h.includes('código conta') || h.includes('codigo conta') || (h.includes('conta') && h.includes('cod')))
+      const idxVal  = header.findIndex(h => h === 'valor')
+      if (idxComp < 0 || idxCod < 0 || idxVal < 0) {
+        alert('Cabeçalhos esperados: Competência, Código Conta, Valor. Não foram localizados.')
+        return
+      }
+      const lancamentos = []
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i]
+        if (!r) continue
+        const compRaw = r[idxComp]
+        const cod = String(r[idxCod]||'').trim()
+        const val = parseFloat(r[idxVal])
+        if (!cod || isNaN(val)) continue
+        let comp = null
+        if (typeof compRaw === 'string') {
+          const m = compRaw.match(/(\d{1,2})\D(\d{4})/)
+          if (m) comp = `${m[2]}-${String(m[1]).padStart(2,'0')}-01`
+        } else if (compRaw instanceof Date) {
+          comp = compRaw.toISOString().slice(0,7) + '-01'
+        } else if (typeof compRaw === 'number') {
+          const d = XLSX.SSF.parse_date_code(compRaw)
+          if (d) comp = `${d.y}-${String(d.m).padStart(2,'0')}-01`
+        }
+        if (!comp) continue
+        lancamentos.push({ codigo_conta:cod, competencia:comp, valor:val })
+      }
+      setImportModal({ lancamentos, resultado:null, importando:false })
+    } catch (e) {
+      alert('Erro lendo planilha: ' + e.message)
+    }
+  }
+
+  async function executarImportacao() {
+    if (!importModal?.lancamentos?.length) return
+    setImportModal(s => ({ ...s, importando:true }))
+    try {
+      const { data, error } = await supabase.rpc('importar_lancamentos_contabeis', {
+        p_lancamentos: importModal.lancamentos
+      })
+      if (error) throw error
+      setImportModal(s => ({ ...s, resultado:data||[], importando:false }))
+      if (orcAtual) await carregarDetalhe(orcAtual)
+    } catch (e) {
+      alert('Erro: ' + e.message)
+      setImportModal(s => ({ ...s, importando:false }))
+    }
+  }
+
   function computeView() {
     const saldoP={}
     const saldoR={}
