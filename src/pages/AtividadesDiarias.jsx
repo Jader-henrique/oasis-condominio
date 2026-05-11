@@ -49,8 +49,27 @@ export default function AtividadesDiarias({ perfil }) {
   const { sortBy, sortDir, onSort, ordenar } = useSort('proxima_data', 'asc')
   const [contas, setContas] = useState([])
   const [buscandoConta, setBuscandoConta] = useState(false)
+  const [orcsFechados, setOrcsFechados] = useState({})
 
-  useEffect(() => { carregar(); carregarContas() }, [])
+  useEffect(() => { carregar(); carregarContas(); carregarOrcsFechados() }, [])
+
+  async function carregarOrcsFechados() {
+    const { data } = await supabase.from('orcamentos')
+      .select('item_id, empresa, motivo_escolha, sem_orcamento, condicao:condicao_pagamento_id(descricao)')
+      .eq('item_tipo', 'atividade')
+      .or('selecionado.eq.true,sem_orcamento.eq.true')
+      .is('excluido_em', null)
+    const map = {}
+    for (const o of (data||[])) {
+      map[o.item_id] = {
+        empresa: o.empresa,
+        motivo: o.motivo_escolha,
+        condicao: o.condicao?.descricao || null,
+        sem_orcamento: o.sem_orcamento
+      }
+    }
+    setOrcsFechados(map)
+  }
 
   async function carregarContas() {
     const { data } = await supabase.from('contas').select('*').is('excluido_em', null).order('descricao')
@@ -376,6 +395,11 @@ export default function AtividadesDiarias({ perfil }) {
             { label:'Valor',           valor:verItem.valor, tipo:'moeda' },
             { label:'Realizado em',    valor:verItem.realizado_em, tipo:'datahora' },
             { label:'Realizado por',   valor:verItem.realizado_por },
+            { label:'Empresa contratada',  valor:orcsFechados[verItem.id]?.empresa },
+            { label:'Condição de pagamento', valor:orcsFechados[verItem.id]?.condicao },
+            { label:'Motivo da escolha', valor: orcsFechados[verItem.id]?.sem_orcamento
+                ? `(SEM ORÇAMENTO PRÉVIO) ${orcsFechados[verItem.id]?.motivo || ''}`
+                : orcsFechados[verItem.id]?.motivo, tipo:'longtext' },
           ]}
         />
       )}

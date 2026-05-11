@@ -55,10 +55,29 @@ export default function Benfeitorias({ perfil }) {
   const [verItem, setVerItem] = useState(null)
   const [contas, setContas] = useState([])
   const [buscandoConta, setBuscandoConta] = useState(false)
+  const [orcsFechados, setOrcsFechados] = useState({})
   const isAdmin = perfil?.perfil === 'admin' || perfil?.perfil === 'sindico'
   const { sortBy, sortDir, onSort, ordenar } = useSort('previsto', 'asc')
 
-  useEffect(() => { carregar(); carregarCategorias(); carregarContas() }, [])
+  useEffect(() => { carregar(); carregarCategorias(); carregarContas(); carregarOrcsFechados() }, [])
+
+  async function carregarOrcsFechados() {
+    const { data } = await supabase.from('orcamentos')
+      .select('item_id, empresa, motivo_escolha, sem_orcamento, condicao:condicao_pagamento_id(descricao)')
+      .eq('item_tipo', 'benfeitoria')
+      .or('selecionado.eq.true,sem_orcamento.eq.true')
+      .is('excluido_em', null)
+    const map = {}
+    for (const o of (data||[])) {
+      map[o.item_id] = {
+        empresa: o.empresa,
+        motivo: o.motivo_escolha,
+        condicao: o.condicao?.descricao || null,
+        sem_orcamento: o.sem_orcamento
+      }
+    }
+    setOrcsFechados(map)
+  }
 
   async function carregarContas() {
     const { data } = await supabase.from('contas').select('*').is('excluido_em', null).order('descricao')
@@ -445,6 +464,11 @@ export default function Benfeitorias({ perfil }) {
               { label:'Recorrência',     valor:verItem.recorrencia },
               { label:'Valor previsto',  valor:verItem.valor_previsto, tipo:'moeda' },
               { label:'Valor realizado', valor:verItem.valor_realizado || verItem.valor, tipo:'moeda' },
+              { label:'Empresa contratada',  valor:orcsFechados[verItem.id]?.empresa },
+              { label:'Condição de pagamento', valor:orcsFechados[verItem.id]?.condicao },
+              { label:'Motivo da escolha', valor: orcsFechados[verItem.id]?.sem_orcamento
+                  ? `(SEM ORÇAMENTO PRÉVIO) ${orcsFechados[verItem.id]?.motivo || ''}`
+                  : orcsFechados[verItem.id]?.motivo, tipo:'longtext' },
               { label:'Início previsto', valor:verItem.previsto, tipo:'data' },
               { label:'Início real',     valor:verItem.data_inicio_real, tipo:'data' },
               { label:'Realizado',       valor:verItem.realizado, tipo:'data' },
