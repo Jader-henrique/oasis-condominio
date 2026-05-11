@@ -884,7 +884,8 @@ export default function OrcamentoCondominio({ perfil }) {
       </tr>
     )
     return (
-      <div>
+      <>
+        <div>
         <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16,flexWrap:'wrap'}}>
           <button className="btn" onClick={()=>setView('lista')}><i className="fa-solid fa-arrow-left" style={{marginRight:6}}></i>Voltar</button>
           <div style={{flex:1}}>
@@ -906,6 +907,11 @@ export default function OrcamentoCondominio({ perfil }) {
               }}>{l}</button>
             ))}
           </div>
+          {isAdmin && (
+            <button className="btn btn-sm" onClick={abrirImportador} title="Importar planilha de lançamentos contábeis">
+              <i className="fa-solid fa-file-import" style={{marginRight:6}}></i>Importar Realizado
+            </button>
+          )}
           <button className="btn btn-sm" onClick={exportarExcel}>
             <i className="fa-solid fa-file-excel" style={{marginRight:6}}></i>Exportar Excel
           </button>
@@ -977,9 +983,101 @@ export default function OrcamentoCondominio({ perfil }) {
             </table>
           </div>
         </div>
+        </div>
+        <ModalImportacao/>
+      </>
+    )
+  }
+
+  // ─── Modal de importação contábil ───
+  function ModalImportacao() {
+    if (!importModal) return null
+    return (
+      <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setImportModal(null)}>
+        <div className="modal" style={{width:720, maxWidth:'95vw', maxHeight:'85vh', display:'flex', flexDirection:'column'}}>
+          <h3 style={{marginTop:0}}>Importar Realizado (Contabilidade)</h3>
+          <p style={{fontSize:12, color:'var(--texto-sec)', marginBottom:12}}>
+            Selecione a planilha padronizada com colunas: <b>Competência</b>, <b>Código Conta</b>, <b>Valor</b>.
+            Os lançamentos serão agrupados por código de conta + competência e gravados em <b>Realizado</b>.
+          </p>
+          <input ref={importFileRef} type="file" accept=".xlsx,.xls" style={{display:'none'}}
+            onChange={e => handleArquivoImportacao(e.target.files?.[0])}/>
+          <div style={{display:'flex', gap:8, marginBottom:12}}>
+            <button className="btn btn-sm" onClick={() => importFileRef.current?.click()}>
+              <i className="fa-solid fa-folder-open" style={{marginRight:6}}></i>Escolher arquivo
+            </button>
+            {importModal.lancamentos.length > 0 && !importModal.resultado && (
+              <button className="btn btn-primary btn-sm" onClick={executarImportacao} disabled={importModal.importando}>
+                {importModal.importando ? 'Importando...' : `Confirmar (${importModal.lancamentos.length} lançamentos)`}
+              </button>
+            )}
+          </div>
+          {importModal.lancamentos.length > 0 && !importModal.resultado && (
+            <div style={{overflowY:'auto', flex:1, border:'0.5px solid var(--borda)', borderRadius:6, padding:8}}>
+              <div style={{fontSize:11, marginBottom:6, color:'var(--texto-sec)'}}>
+                Prévia ({importModal.lancamentos.length} linhas):
+              </div>
+              <table style={{width:'100%', fontSize:11}}>
+                <thead><tr style={{background:'var(--cinza-bg)'}}>
+                  <th style={{padding:'4px 6px',textAlign:'left'}}>Competência</th>
+                  <th style={{padding:'4px 6px',textAlign:'left'}}>Código Conta</th>
+                  <th style={{padding:'4px 6px',textAlign:'right'}}>Valor</th>
+                </tr></thead>
+                <tbody>
+                  {importModal.lancamentos.slice(0,100).map((l,i) => (
+                    <tr key={i}>
+                      <td style={{padding:'2px 6px'}}>{l.competencia.slice(0,7)}</td>
+                      <td style={{padding:'2px 6px', fontFamily:'monospace'}}>{l.codigo_conta}</td>
+                      <td style={{padding:'2px 6px', textAlign:'right'}}>{fmtMoeda(l.valor)}</td>
+                    </tr>
+                  ))}
+                  {importModal.lancamentos.length > 100 && (
+                    <tr><td colSpan={3} style={{padding:'4px 6px',textAlign:'center',color:'var(--texto-ter)'}}>... mais {importModal.lancamentos.length-100} linhas</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {importModal.resultado && (
+            <div style={{overflowY:'auto', flex:1, border:'0.5px solid var(--borda)', borderRadius:6, padding:8}}>
+              <div style={{fontSize:12, marginBottom:8}}>
+                <span style={{color:'var(--verde)', fontWeight:600}}>{importModal.resultado.filter(r => r.gravado).length} gravados</span>
+                {' · '}
+                <span style={{color:'var(--vermelho)', fontWeight:600}}>{importModal.resultado.filter(r => !r.gravado).length} não casados</span>
+              </div>
+              {importModal.resultado.filter(r => !r.gravado).length > 0 && (
+                <>
+                  <div style={{fontSize:11, fontWeight:600, marginBottom:4, color:'var(--vermelho)'}}>Linhas não casadas:</div>
+                  <table style={{width:'100%', fontSize:11}}>
+                    <thead><tr style={{background:'var(--cinza-bg)'}}>
+                      <th style={{padding:'4px 6px',textAlign:'left'}}>Competência</th>
+                      <th style={{padding:'4px 6px',textAlign:'left'}}>Código Conta</th>
+                      <th style={{padding:'4px 6px',textAlign:'right'}}>Valor</th>
+                      <th style={{padding:'4px 6px',textAlign:'left'}}>Motivo</th>
+                    </tr></thead>
+                    <tbody>
+                      {importModal.resultado.filter(r => !r.gravado).map((r,i) => (
+                        <tr key={i}>
+                          <td style={{padding:'2px 6px'}}>{String(r.competencia).slice(0,7)}</td>
+                          <td style={{padding:'2px 6px',fontFamily:'monospace'}}>{r.codigo_conta}</td>
+                          <td style={{padding:'2px 6px',textAlign:'right'}}>{fmtMoeda(r.valor_total)}</td>
+                          <td style={{padding:'2px 6px',color:'var(--vermelho)'}}>{r.motivo}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </div>
+          )}
+          <div style={{display:'flex', justifyContent:'flex-end', marginTop:12, gap:8}}>
+            <button className="btn" onClick={() => setImportModal(null)}>Fechar</button>
+          </div>
+        </div>
       </div>
     )
   }
+
 
   return null
 }

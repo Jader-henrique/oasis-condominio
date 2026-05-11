@@ -146,6 +146,11 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
       update = { valor_realizado: orc.valor }
     }
     await supabase.from(tabela).update(update).eq('id', itemId)
+    // Lançar parcelas no realizado do Orçamento do Condomínio (se a conta for de origem Fornecedores)
+    try {
+      const { error: rpcErr } = await supabase.rpc('lancar_parcelas_fornecedor', { p_orcamento_id: orc.id })
+      if (rpcErr) console.warn('Falha ao lançar parcelas:', rpcErr.message)
+    } catch (e) { console.warn('lancar_parcelas_fornecedor:', e) }
     setSalvando(false); setFecharForm(null); carregar()
   }
 
@@ -153,19 +158,31 @@ export default function MapaCotacoes({ tipo, itemId, itemNome, tipoLabel, perfil
     const motivo = prompt('Motivo (situação emergencial):')
     if (!motivo) return
     setSalvando(true)
-    await supabase.from('orcamentos').insert([{
+    const { data: novoOrc } = await supabase.from('orcamentos').insert([{
       item_tipo: tipo, item_id: itemId,
       empresa:'(sem orçamento prévio)', valor:null,
       sem_orcamento:true, dispensa:false, selecionado:true,
       motivo_escolha: motivo, status:'realizado',
       data_criacao: new Date().toISOString()
-    }])
+    }]).select().single()
+    if (novoOrc?.id) {
+      try {
+        await supabase.rpc('lancar_parcelas_fornecedor', { p_orcamento_id: novoOrc.id })
+      } catch (e) { console.warn('parcelas sem_orc:', e) }
+    }
     setSalvando(false); carregar()
   }
 
   async function estornar() {
     if (!confirm('Estornar fechamento do negócio? Os orçamentos voltam a ficar abertos.')) return
     setSalvando(true)
+    // Estornar parcelas no realizado (todos orçamentos selecionados/sem_orcamento deste item)
+    const { data: orcsParaEstornar } = await supabase.from('orcamentos').select('id')
+      .eq('item_tipo', tipo).eq('item_id', itemId).or('selecionado.eq.true,sem_orcamento.eq.true')
+    for (const o of (orcsParaEstornar||[])) {
+      try { await supabase.rpc('estornar_parcelas_fornecedor', { p_orcamento_id: o.id }) }
+      catch (e) { console.warn('estornar parcelas:', e) }
+    }
     await supabase.from('orcamentos').update({ selecionado:false, motivo_escolha:null, status:null })
       .eq('item_id', itemId).eq('item_tipo', tipo)
     await supabase.from('orcamentos').delete().eq('item_id', itemId).eq('item_tipo', tipo).eq('sem_orcamento', true)
